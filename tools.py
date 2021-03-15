@@ -1,5 +1,7 @@
 import torch
 import numpy as np
+#import cv2
+from matplotlib import pyplot as plt
 
 
 class EarlyStopping:
@@ -35,13 +37,25 @@ class ModelCheckpoint:
             torch.save({
                 'args': self.args,
                 'model': model.state_dict(),
-                'loss': loss.item()
+                'loss': loss
             }, self.path)
 
 
-        
+# def calculate_histogram(image):
+#     #hist = cv2.calcHist([image],[0],None,[2],[0,2])
+#     hist, bins = np.histogram(image, 2)
+#     return hist[0]/hist[1]
 
+# def adjust_data(image):
+#         if np.max(image) > 1:
+#             image = image / 255
+#             image[image > 0.5] = 1
+#             image[image <= 0.5] = 0
+#         return image
 
-
-        
-
+# if __name__ == '__main__':
+#     image = cv2.imread("data/train/label/RS0116_0414_0_0_0_label.png",0)
+#     image = adjust_data(image).flatten()
+#     # print(type(image))
+#     print(calculate_histogram(image))
+    

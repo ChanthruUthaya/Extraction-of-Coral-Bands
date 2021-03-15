@@ -20,8 +20,6 @@ from multiprocessing import cpu_count
 from pathlib import Path
 import numpy as np
 
-import statistics as stats
-
 import time
 
 torch.backends.cudnn.benchmark = True
@@ -29,7 +27,7 @@ torch.backends.cudnn.benchmark = True
 #All possible arguments.
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--epochs", type=int, default=20, help="Number of epochs to train for")
+parser.add_argument("--epochs", type=int, default=35, help="Number of epochs to train for")
 parser.add_argument("--lr", type=float, default=0.0001, help="Learning rate")
 parser.add_argument("--batch", type=int, default=2, help="Batch size")
 parser.add_argument("--dir", type=str, default="data", help="Data directory")
@@ -37,7 +35,7 @@ parser.add_argument("-j", "--worker-count", default=cpu_count(), type=int, help=
 
 
 parser.add_argument("--vals", type=int, default=1, help="The number of validation samples to test")
-parser.add_argument("--val-fq", default=1, type=int, help="How frequently to test the model on the validation set in number of epochs")
+parser.add_argument("--val-fq", default=2, type=int, help="How frequently to test the model on the validation set in number of epochs")
 parser.add_argument("--summary-dir", type=str, default="summary", help="Summary directory")
 parser.add_argument("--log-fq", default=1, type=int, help="How frequently to save logs to tensorboard in number of steps")
 parser.add_argument("--print-fq", default=10, type=int, help="How frequently to print progress to the command line in number of steps")
@@ -88,8 +86,6 @@ class Trainer:
         self.summary_writer = summary_writer
         self.traindata = train_gen
         self.valdata = val_gen
-        self.losses = []
-        self.valloss = None
         # self.train_gen = train_gen.generator()
         # self.val_gen = val_gen.generator()
     
@@ -131,7 +127,7 @@ class Trainer:
                # logits = logits.view(-1,logits.size(2), logits.size(3))
 
                 
-                loss = self.criterion(logits.squeeze(), labels.squeeze())
+                loss = self.criterion(logits, labels.squeeze().long())
                 
                 
                 # if self.step == 2:
@@ -154,14 +150,13 @@ class Trainer:
 
                 self.optimizer.step()
 
-                self.losses.append(loss.item())
                 # if self.step % 100 == 0:
 
                 # for name, param in self.model.named_parameters():
                 #     print(name, param.grad.norm())
                     # if param.grad == None:
                     #   print(name)
-                
+
 
                 # b = list(self.model.parameters())[0].clone()
                 # print(torch.equal(a.data, b.data))
@@ -180,8 +175,8 @@ class Trainer:
                 if ((self.step + 1) % args.print_fq) == 0:
                     #avg = sum(self.losses)/len(self.losses)
                     #loss = round(avg, 5)
-                    self.print_metrics(epoch, stats.mean(self.losses), data_load_time, step_time)
-                    self.losses.clear()
+                    self.print_metrics(epoch, loss.item(), data_load_time, step_time)
+                    #self.losses.clear()
 
                 # if self.step % 30 == 0:
                 #     for tag, value in self.model.named_parameters():
@@ -193,6 +188,8 @@ class Trainer:
 
                 self.step += 1
                 data_load_start_time = time.time()
+            
+            #self.checkpoint(self.model, loss, epoch)
 
             self.summary_writer.add_scalar("epoch", epoch, self.step)
             
@@ -201,8 +198,6 @@ class Trainer:
                     # self.validate() will put the model in validation mode,
                     # so we have to switch back to train mode afterwards
                     self.model.train()
-                    
-            self.checkpoint(self.model, self.valloss, epoch)
 
             
     
@@ -217,15 +212,13 @@ class Trainer:
                 images = batch['image'].to(self.device)
                 labels = batch['label'].to(self.device)
                 logits = self.model(images)
-                loss = self.criterion(logits.squeeze(), labels.squeeze(1))
+                loss = self.criterion(logits, labels.squeeze(1).long())
                 total_loss += loss.item()
                 print("max val: ",np.max(torch.sigmoid(logits).cpu().numpy()))
                 preds.append(logits.cpu().numpy())
         
 
         average_loss = total_loss / len(self.val_loader)
-
-        self.valloss = average_loss
 
         print(f"validation loss: {average_loss:.5f}")
 
@@ -340,8 +333,8 @@ def main(args):
 
     optimizer = optim.Adam(model.parameters(), lr = args.lr, eps=1e-07)
     #optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=1e-8, momentum=0.9)
-    criterion = nn.BCEWithLogitsLoss()
-    #criterion = nn.CrossEntropyLoss()#weight = torch.Tensor([0.1,1.0]).to(DEVICE))
+   # criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.CrossEntropyLoss(weight = torch.Tensor([0.1,1.0]).to(DEVICE))
     trainer = Trainer(model, train_dataset, validation_dataset, model_checkpoint, criterion,optimizer, DEVICE, summary_writer, train_loader=train_loader, val_loader=validation_loader)
     trainer.train(args)
     #model = Sensor(2,1)

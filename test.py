@@ -2,6 +2,8 @@
 import argparse
 from data import *
 from models import *
+#from models2 import *
+from models_test import *
 from tools import *
 import os
 import torch
@@ -17,11 +19,15 @@ from pathlib import Path
 
 import time
 
+import pathlib
+temp = pathlib.PosixPath
+pathlib.PosixPath = pathlib.WindowsPath
+
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--resume-checkpoint", type=Path, default=Path("./checkpoint/checkpoint"))
+parser.add_argument("--resume-checkpoint", type=str, default="./checkpoint/checkpoint")
 parser.add_argument("--batch-size", default=2, type=int, help="Number of images within each mini-batch")
-parser.add_argument("--dir", type=Path, default=Path("./data"))
+parser.add_argument("--dir", type=str, default="./data")
 parser.add_argument("-j", "--worker-count", default=cpu_count(), type=int, help="Number of worker processes used to load data.")
 args = parser.parse_args()
 
@@ -32,13 +38,13 @@ else:
 
 
 def main(args):
-    model = UNET(classes=2, height=256, width=256, channels=1)
+    model = UNet(1,1).to(DEVICE)
 
 
     ### CHECKPOINT - load parameters, args, loss ###
-    if args.resume_checkpoint != None and args.resume_checkpoint.exists():
+    if args.resume_checkpoint != None:
         if torch.cuda.is_available():
-            checkpoint = torch.load(args.resume_checkpoint)
+            checkpoint = torch.load(args.resume_checkpoint, map_location=torch.device('cuda'))
         else:
             # if CPU is used
             checkpoint = torch.load(args.resume_checkpoint, map_location=torch.device('cpu'))
@@ -47,19 +53,14 @@ def main(args):
 
         model.load_state_dict(checkpoint['model'])
 
-    images = str(args.dir) + "/test/image"
-    labels = str(args.dir) + "/test/label"
-    transform = [
-        transforms.ToTensor()
-        ]
+    dir_test = args.dir + "/test"
+    test_label = args.dir + "/test"
 
-    test_data = CoralDataset(img_dir=images, label_dir=labels, augmentations=transform, mode=1)
-
-    test_loader = DataLoader(test_data, shuffle=False ,batch_size=args.batch_size, num_workers=args.worker_count, pin_memory=True)
+    test_data = CoralDataset(dir_test, augmentations=[] ,mode=1)
+    test_loader = DataLoader(test_data, shuffle=False ,batch_size=1, num_workers=args.worker_count, pin_memory=True)
 
     criterion = nn.BCEWithLogitsLoss()
 
-   # preds = np.empty([0, 2304])
     total_loss = 0
     model.eval()
     preds = []
@@ -72,17 +73,18 @@ def main(args):
             image = image.to(DEVICE)
             labels = labels.to(DEVICE)
             logits = model(image)
-            loss = criterion(logits, labels)
+            loss = criterion(logits.squeeze(), labels.squeeze())
+            logits = torch.sigmoid(logits)
             print(f'[{i}/{len(test_loader)}] batch at loss: {loss.item()}')
             total_loss += loss.item()
             preds.append(logits.cpu().numpy())
-           # preds = np.vstack((preds, logits.cpu().numpy()))
+            print(np.max(logits.squeeze().cpu().numpy()))
+            save_predictions("./predictions",logits.squeeze().cpu().numpy(), i)
 
+    
     average_loss = total_loss / len(test_loader)
 
     print(average_loss)
-    print(len(preds))
-    save_predictions("./predictions",preds)
 
 
 if __name__ == '__main__':
