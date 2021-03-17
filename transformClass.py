@@ -35,7 +35,7 @@ class AdjustBrightness:
 
     def __call__(self, image, label):
         val = random.uniform(self.l,self.r)
-        return TF.adjust_brightness(image, val), label
+        return image*val, label
 
 class Affine:
     def __init__(self, translate:tuple, shear_range:tuple, scale:float, angle:tuple):

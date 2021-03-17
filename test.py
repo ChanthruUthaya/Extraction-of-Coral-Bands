@@ -79,7 +79,7 @@ def main(args):
             total_loss += loss.item()
             preds.append(logits.cpu().numpy())
             print(np.max(logits.squeeze().cpu().numpy()))
-            save_predictions("./predictions",logits.squeeze().cpu().numpy(), i)
+            save_pred("./predictions",logits.squeeze().cpu().numpy(), i)
 
     
     average_loss = total_loss / len(test_loader)

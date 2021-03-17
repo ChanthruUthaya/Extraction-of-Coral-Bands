@@ -228,6 +228,7 @@ class UNET2D(nn.Module):
 
     def forward(self, images: torch.Tensor):
         out1 = self.down1(images)
+        print(out1.dtype)
         out2 = self.down2(out1)
         out3 = self.down3(out2)
 

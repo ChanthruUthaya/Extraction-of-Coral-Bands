@@ -197,6 +197,7 @@ class CoralDataset(Dataset):
         img, label = CoralDataset.adjust_data(img, label)
         img, label = Image.fromarray(img), Image.fromarray(label)
         trans = transforms.Compose([
+                #transforms.ColorJitter(brightness=0.1, contrast=0.1),
                 transforms.ToTensor(),
                 ])
         if(self.mode == 0):
@@ -291,21 +292,36 @@ def save_predictions(save_path, image, i):
 #  # output_label = img_as_ubyte(label_img)
 
 #   # Threshold the image using Otsu's method.
-#   _, output = cv.threshold(output, 0, 255, cv.THRESH_OTSU)
+    _, output = cv.threshold(output, 0, 255, cv.THRESH_OTSU)
 
 #   # Replace all 255s with 1 in preparation for the skeletonization.
-#   output[output == 255] = 1
+    output[output == 255] = 1
 
 #   # Skeletonize the thresholded predictions.
-#   skel = morphology.skeletonize(output)
-#   skel = skel.astype(int) * 255
+    skel = morphology.skeletonize(output)
+    skel = skel.astype(int) * 255
 
     #Output the skeletonized prediction.
     print("Saving prediction to out.png")
 
     print(output.shape)
 
+    cv.imwrite(os.path.join(save_path, f"{i}_predict.png"), skel)
+
+def save_pred(save_path, image, i):
+        #image = image[0, :, :]
+#
+#  label_img = label[0, :, :]
+
+    output = img_as_ubyte(image)
+#  # output_label = img_as_ubyte(label_img)
+    #Output the skeletonized prediction.
+    print("Saving prediction to out.png")
+
+    print(output.shape)
+
     cv.imwrite(os.path.join(save_path, f"{i}_predict.png"), output)
+
 
 
 # train_dataset = datasets.ImageFolder(

@@ -31,6 +31,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument("--epochs", type=int, default=20, help="Number of epochs to train for")
 parser.add_argument("--lr", type=float, default=0.0001, help="Learning rate")
+parser.add_argument("--wd", type=float, default=0.00001, help="weight decay")
 parser.add_argument("--batch", type=int, default=2, help="Batch size")
 parser.add_argument("--dir", type=str, default="data", help="Data directory")
 parser.add_argument("-j", "--worker-count", default=cpu_count(), type=int, help="Number of worker processes used to load data.")
@@ -40,7 +41,7 @@ parser.add_argument("--vals", type=int, default=1, help="The number of validatio
 parser.add_argument("--val-fq", default=1, type=int, help="How frequently to test the model on the validation set in number of epochs")
 parser.add_argument("--summary-dir", type=str, default="summary", help="Summary directory")
 parser.add_argument("--log-fq", default=1, type=int, help="How frequently to save logs to tensorboard in number of steps")
-parser.add_argument("--print-fq", default=1, type=int, help="How frequently to print progress to the command line in number of steps")
+parser.add_argument("--print-fq", default=50, type=int, help="How frequently to print progress to the command line in number of steps")
 parser.add_argument("--tests", type=int, default=56, help="The number of tests to carry out once training is complete")
 
 ### CHECKPOINT ###
@@ -92,6 +93,7 @@ class Trainer:
         self.valloss = None
         self.train_gen = train_gen.generator()
         self.val_gen = val_gen.generator()
+        self.epoch = 0
     
     def train(self, args):
         
@@ -103,106 +105,112 @@ class Trainer:
         # print(l)
 
         
-        for epoch in range(args.epochs):
-            data_load_start_time = time.time()
+        # for epoch in range(args.epochs):
+        #     data_load_start_time = time.time()
 
-            print("start epoch")
+        #     print("start epoch")
 
-            for batch in self.train_loader:
-                images = batch['image'].to(self.device)
-                labels = batch['label'].to(self.device)
+        for i, (image, label) in enumerate(self.train_gen):
+            if i%500 == 1:
+                self.epoch += 1
+            if self.epoch >= args.epochs:
+                break
 
-                #print(torch.max(images), torch.max(labels))
+            images = image.to(self.device)
+            labels = label.to(self.device)
 
-
-                # print(images.size(), labels.size())#, weighting.type())
-
-                # print(images.requires_grad)
-
-                data_load_end_time = time.time()
-
-                self.optimizer.zero_grad()
+            #print(torch.max(images), torch.max(labels))
 
 
-                logits = self.model(images)
+            # print(images.size(), labels.size())#, weighting.type())
+
+            # print(images.requires_grad)
+
+            data_load_end_time = time.time()
+
+            self.optimizer.zero_grad()
 
 
-                #print(torch.max(torch.sigmoid(logits)))
-               # logits = logits.view(-1,logits.size(2), logits.size(3))
+            logits = self.model(images)
 
-                
-                loss = self.criterion(logits.squeeze(), labels.squeeze())
-                
-                
-                # if self.step == 2:
-                #  get_dot = register_hooks(logits)
-                
-                #print("grad is ", list(self.model.parameters())[0].grad)
-                #a = list(self.model.parameters())[0].clone()
-                loss.backward()
 
-               # if self.step == 2:
-                    # print("here")
-                   #dot = get_dot()
-                 #   dot.save('tmp.dot')
+            #print(torch.max(torch.sigmoid(logits)))
+            # logits = logits.view(-1,logits.size(2), logits.size(3))
 
-                # for param in list(self.model.parameters()):
-                #   print(param.requires_grad)
-                
-                #nn.utils.clip_grad_value_(self.model.parameters(), 0.02)
-                #plot_grad_flow2(self.model.named_parameters())
-
-                self.optimizer.step()
-
-                self.losses.append(loss.item())
-                # if self.step % 100 == 0:
-
-                # for name, param in self.model.named_parameters():
-                #     print(name, param.grad.norm())
-                    # if param.grad == None:
-                    #   print(name)
-                
-
-                # b = list(self.model.parameters())[0].clone()
-                # print(torch.equal(a.data, b.data))
-
-                #logits = torch.sigmoid(logits)
-
-                # conf = gather_data(logits.detach().cpu().numpy(), labels.detach().cpu().numpy())
-                # acc = (conf['tp']+conf['tn'])/(conf['tp']+conf['fp']+conf['fn']+conf['tn'])
-                #print(round(acc, 5))
-                #self.losses.append(loss.item())
-
-                data_load_time = data_load_end_time - data_load_start_time
-                step_time = time.time() - data_load_end_time
-                # if ((self.step + 1) % args.log_fq) == 0:
-                #     self.log_metrics(epoch, loss.item(), data_load_time, step_time)
-                if ((self.step + 1) % args.print_fq) == 0:
-                    #avg = sum(self.losses)/len(self.losses)
-                    #loss = round(avg, 5)
-                    self.print_metrics(epoch, stats.mean(self.losses), data_load_time, step_time)
-                    self.losses.clear()
-
-                # if self.step % 30 == 0:
-                #     for tag, value in self.model.named_parameters():
-                #         tag = tag.replace('.', '/')
-                        # print('weights/' + tag + " ", value.data.norm().item())
-                        # print('grads/' + tag + " ", value.grad.data.norm().item())
-                        # self.summary_writer.add_scalar('weights/' + tag, value.data.norm().item(), self.step)
-                        # self.summary_writer.add_scalar('grads/' + tag, value.grad.data.norm().item(), self.step)
-
-                self.step += 1
-                data_load_start_time = time.time()
-
-            self.summary_writer.add_scalar("epoch", epoch, self.step)
             
-            if((self.step + 1) % args.val_fq) == 0:
+            loss = self.criterion(logits.squeeze(), labels.squeeze())
+            
+            
+            # if self.step == 2:
+            #  get_dot = register_hooks(logits)
+            
+            #print("grad is ", list(self.model.parameters())[0].grad)
+            #a = list(self.model.parameters())[0].clone()
+            loss.backward()
+
+            # if self.step == 2:
+                # print("here")
+                #dot = get_dot()
+                #   dot.save('tmp.dot')
+
+            # for param in list(self.model.parameters()):
+            #   print(param.requires_grad)
+            
+            #nn.utils.clip_grad_value_(self.model.parameters(), 0.02)
+            #plot_grad_flow2(self.model.named_parameters())
+
+            self.optimizer.step()
+
+            self.losses.append(loss.item())
+            # if self.step % 100 == 0:
+
+            # for name, param in self.model.named_parameters():
+            #     print(name, param.grad.norm())
+                # if param.grad == None:
+                #   print(name)
+            
+
+            # b = list(self.model.parameters())[0].clone()
+            # print(torch.equal(a.data, b.data))
+
+            #logits = torch.sigmoid(logits)
+
+            # conf = gather_data(logits.detach().cpu().numpy(), labels.detach().cpu().numpy())
+            # acc = (conf['tp']+conf['tn'])/(conf['tp']+conf['fp']+conf['fn']+conf['tn'])
+            #print(round(acc, 5))
+            #self.losses.append(loss.item())
+
+            #data_load_time = data_load_end_time - data_load_start_time
+            #step_time = time.time() - data_load_end_time
+            # if ((self.step + 1) % args.log_fq) == 0:
+            #     self.log_metrics(epoch, loss.item(), data_load_time, step_time)
+            if ((self.step + 1) % args.print_fq) == 0:
+                #avg = sum(self.losses)/len(self.losses)
+                #loss = round(avg, 5)
+                self.print_metrics(self.epoch, stats.mean(self.losses), self.step%500)#, data_load_time, step_time)
+                self.losses.clear()
+
+            # if self.step % 30 == 0:
+            #     for tag, value in self.model.named_parameters():
+            #         tag = tag.replace('.', '/')
+                    # print('weights/' + tag + " ", value.data.norm().item())
+                    # print('grads/' + tag + " ", value.grad.data.norm().item())
+                    # self.summary_writer.add_scalar('weights/' + tag, value.data.norm().item(), self.step)
+                    # self.summary_writer.add_scalar('grads/' + tag, value.grad.data.norm().item(), self.step)
+
+            self.step += 1
+            #data_load_start_time = time.time()
+
+            #self.summary_writer.add_scalar("epoch", epoch, self.step)
+            
+            if((self.step) % 500) == 0:
                     self.validate()
                     # self.validate() will put the model in validation mode,
                     # so we have to switch back to train mode afterwards
                     self.model.train()
 
-            self.checkpoint(self.model, self.valloss, epoch)
+            if((self.step) % 500) == 0:
+                self.checkpoint(self.model, self.valloss, self.epoch)
 
             
     
@@ -235,15 +243,15 @@ class Trainer:
             self.step
         )
 
-    def print_metrics(self, epoch, loss, data_load_time, step_time):
-        epoch_step = self.step % len(self.train_loader)
+    def print_metrics(self, epoch, loss, step):
+        #epoch_step = self.step % len(self.train_loader)
         print(
                 f"epoch: [{epoch}], "
-                f"step: [{epoch_step}/{len(self.train_loader)}], " 
+                f"step: [{step}/500], " 
                 f"batch loss: {loss:.5f}, "
                 f"data load time: "
-                f"{data_load_time:.5f}, "
-                f"step time: {step_time:.5f}"
+                # f"{data_load_time:.5f}, "
+                # f"step time: {step_time:.5f}"
         )
     
     def log_metrics(self, epoch, loss, data_load_time, step_time):
@@ -340,7 +348,7 @@ def main(args):
 
     model_checkpoint = ModelCheckpoint(args)
 
-    optimizer = optim.Adam(model.parameters(), lr = args.lr, eps=1e-07)
+    optimizer = optim.Adam(model.parameters(), lr = args.lr, eps=1e-07, weight_decay=args.wd)
     #optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=1e-8, momentum=0.9)
     criterion = nn.BCEWithLogitsLoss()
     #criterion = nn.CrossEntropyLoss()#weight = torch.Tensor([0.1,1.0]).to(DEVICE))
