@@ -4,6 +4,8 @@ from data import *
 from models import *
 #from models2 import *
 from model_ablated import *
+from sensorAblated import *
+from sensor import *
 from models_test import *
 from tools import *
 import os
@@ -26,7 +28,7 @@ pathlib.PosixPath = pathlib.WindowsPath
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--resume-checkpoint", type=str, default="./checkpoint/checkpoint")
+parser.add_argument("--resume-checkpoint", type=str, default="./checkpoint/checkpoint_lstm")
 parser.add_argument("--batch-size", default=2, type=int, help="Number of images within each mini-batch")
 parser.add_argument("--dir", type=str, default="./data")
 parser.add_argument("-j", "--worker-count", default=cpu_count(), type=int, help="Number of worker processes used to load data.")
@@ -39,7 +41,7 @@ else:
 
 
 def main(args):
-    model = UNetAblated(1,1).to(DEVICE)
+    model = SensorAblated(1,1).to(DEVICE)
 
 
     ### CHECKPOINT - load parameters, args, loss ###
@@ -57,7 +59,7 @@ def main(args):
     dir_test = args.dir + "/test"
     test_label = args.dir + "/test"
 
-    test_data = CoralDataset(dir_test, augmentations=[] ,mode=1)
+    test_data = CoralDataset3DNew(dir_test,mode=1, k=1)
     test_loader = DataLoader(test_data, shuffle=False ,batch_size=1, num_workers=args.worker_count, pin_memory=True)
 
     criterion = nn.BCEWithLogitsLoss()

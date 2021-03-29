@@ -3,7 +3,6 @@ from data import *
 from models import *
 #from models2 import *
 from models_test import *
-from model_ablated import *
 from tools import *
 from transformClass import *
 from sensor3d import *
@@ -14,7 +13,7 @@ import torch.backends.cudnn
 from torch import nn, optim
 from torch.nn import functional as F
 from torch.optim.optimizer import Optimizer
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from multiprocessing import cpu_count
@@ -42,7 +41,7 @@ parser.add_argument("--vals", type=int, default=1, help="The number of validatio
 parser.add_argument("--val-fq", default=1, type=int, help="How frequently to test the model on the validation set in number of epochs")
 parser.add_argument("--summary-dir", type=str, default="summary", help="Summary directory")
 parser.add_argument("--log-fq", default=1, type=int, help="How frequently to save logs to tensorboard in number of steps")
-parser.add_argument("--print-fq", default=1, type=int, help="How frequently to print progress to the command line in number of steps")
+parser.add_argument("--print-fq", default=50, type=int, help="How frequently to print progress to the command line in number of steps")
 parser.add_argument("--tests", type=int, default=56, help="The number of tests to carry out once training is complete")
 
 ### CHECKPOINT ###
@@ -68,8 +67,6 @@ class Trainer:
     def __init__(
         self, 
         model: nn.Module, 
-        train_gen,
-        val_gen,
         checkpoint,
         criterion: nn.Module, 
         optimizer,
@@ -86,14 +83,9 @@ class Trainer:
         self.criterion = criterion
         self.optimizer = optimizer
         self.step = 0
-        self.losses = []
         self.summary_writer = summary_writer
-        self.traindata = train_gen
-        self.valdata = val_gen
         self.losses = []
         self.valloss = None
-        self.train_gen = train_gen.generator()
-        self.val_gen = val_gen.generator()
     
     def train(self, args):
         
@@ -128,10 +120,10 @@ class Trainer:
 
                 logits = self.model(images)
 
-                # logit_clone = logits.detach().clone()
+                logit_clone = logits.detach().clone()
 
-                # max_val = torch.max(torch.sigmoid(logit_clone))
-                # print(max_val)
+                max_val = torch.max(torch.sigmoid(logit_clone))
+                print(max_val)
 
 
                 #print(torch.max(torch.sigmoid(logits)))
@@ -307,8 +299,7 @@ def main(args):
 
     print(torch.__version__)
 
-    dir_train =  args.dir + "/train"
-    dir_val = args.dir + "/val"
+    dir_train = os.readlink('scratch') + "/data/train/"
 
 
     aug_dict = dict(rotation_range=2,
@@ -333,26 +324,30 @@ def main(args):
     # train_dataset =CoralDataset2D(sample_dir="data/train/image", 
     #                             label_dir="data/train/label",
     #                             transform=transform)
-    
-    train_dataset= CoralDataset(dir_train,transform, 0, aug_dict=aug_dict)
-    validation_dataset = CoralDataset(dir_val,transform, 1)
-    train_loader = DataLoader(train_dataset, batch_size=args.batch ,shuffle=True,pin_memory=True ,num_workers=args.worker_count)
-    validation_loader = DataLoader(validation_dataset, batch_size=args.batch ,shuffle=False,pin_memory=True ,num_workers=args.worker_count)
+
+    train_dataset= CoralDatasetNew(dir_train,transform, 0)
+
+    n_val = int(len(train_dataset)*0.05)
+    n_train = len(train_dataset) - n_val
+    train, val = random_split(train_dataset, [n_train, n_val])
+    #validation_dataset = CoralDataset(dir_val,transform, 1)
+    train_loader = DataLoader(train, batch_size=args.batch ,shuffle=True,pin_memory=True ,num_workers=args.worker_count)
+    validation_loader = DataLoader(val, batch_size=1 ,shuffle=False,pin_memory=True ,num_workers=args.worker_count)
 
     log_dir = get_summary_writer_log_dir(args)
     print(f"Writing logs to {log_dir}")
     summary_writer = SummaryWriter(log_dir, flush_secs=5)
 
-    model = UNetAblated(1, 1)
+    model = UNet(1, 1)
     model.apply(initialize_parameters)
 
     model_checkpoint = ModelCheckpoint(args)
 
-    optimizer = optim.Adam(model.parameters(), lr = args.lr, eps=1e-07, weight_decay= args.wd)
+    optimizer = optim.Adam(model.parameters(), lr = args.lr)#, eps=1e-07, weight_decay= args.wd)
     #optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=1e-8, momentum=0.9)
     criterion = nn.BCEWithLogitsLoss()
     #criterion = nn.CrossEntropyLoss()#weight = torch.Tensor([0.1,1.0]).to(DEVICE))
-    trainer = Trainer(model, train_dataset, validation_dataset, model_checkpoint, criterion,optimizer, DEVICE, summary_writer, train_loader=train_loader, val_loader=validation_loader)
+    trainer = Trainer(model, model_checkpoint, criterion,optimizer, DEVICE, summary_writer, train_loader=train_loader, val_loader=validation_loader)
     trainer.train(args)
     #model = Sensor(2,1)
 

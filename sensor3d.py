@@ -160,7 +160,7 @@ class UNETUp(nn.Module):
 
         return out9
 
-class Sensor(nn.Module):
+class Sensor3D(nn.Module):
     def __init__(self, classes, input_channels):
         super(Sensor, self).__init__()
         self.classes = classes
