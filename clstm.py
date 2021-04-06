@@ -92,7 +92,7 @@ class ConvLSTM(nn.Module):
             cell_output.append(h)
 
         output = torch.stack(cell_output, dim = 1)
-        del cell_output
+       
 
         return output, (h,c)
 

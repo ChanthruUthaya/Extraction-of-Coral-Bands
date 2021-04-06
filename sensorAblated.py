@@ -10,6 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 import math
 from clstm import *
+from cgru import *
 
 class ImageShape(NamedTuple):
     height: int
@@ -194,6 +195,7 @@ class SensorAblated(nn.Module):
         self.blstm1 = ConvBLSTM(in_channels=512, hidden_channels=1024, kernel_size=(3, 3), batch_first=True)
         self.tdUp = TimeDistributedUp(self.unetUp)
         self.blstm2 = ConvBLSTM(in_channels=64, hidden_channels=64, kernel_size=(3, 3), batch_first=True)
+        #self.bcgru = ConvBGRU(in_channels=64, hidden_channels=64, kernel_size=(3, 3), num_layer=1 ,batch_first=True)
 
         self.outc = OutConv(64, 1)
 

@@ -41,8 +41,8 @@ parser.add_argument("-j", "--worker-count", default=cpu_count(), type=int, help=
 parser.add_argument("--vals", type=int, default=1, help="The number of validation samples to test")
 parser.add_argument("--val-fq", default=1, type=int, help="How frequently to test the model on the validation set in number of epochs")
 parser.add_argument("--summary-dir", type=str, default="summary", help="Summary directory")
-parser.add_argument("--log-fq", default=1, type=int, help="How frequently to save logs to tensorboard in number of steps")
-parser.add_argument("--print-fq", default=1, type=int, help="How frequently to print progress to the command line in number of steps")
+parser.add_argument("--log-fq", default=5, type=int, help="How frequently to save logs to tensorboard in number of steps")
+parser.add_argument("--print-fq", default=10, type=int, help="How frequently to print progress to the command line in number of steps")
 parser.add_argument("--tests", type=int, default=56, help="The number of tests to carry out once training is complete")
 
 ### CHECKPOINT ###
@@ -84,6 +84,7 @@ class Trainer:
         self.val_loader = val_loader
         self.checkpoint = checkpoint
         self.criterion = criterion
+        self.val_criterion = nn.BCEWithLogitsLoss()
         self.optimizer = optimizer
         self.step = 0
         self.losses = []
@@ -162,6 +163,8 @@ class Trainer:
                 self.optimizer.step()
 
                 self.losses.append(loss.item())
+
+                self.step += 1
                 # if self.step % 100 == 0:
 
                 # for name, param in self.model.named_parameters():
@@ -182,8 +185,8 @@ class Trainer:
 
                 data_load_time = data_load_end_time - data_load_start_time
                 step_time = time.time() - data_load_end_time
-                # if ((self.step + 1) % args.log_fq) == 0:
-                #     self.log_metrics(epoch, loss.item(), data_load_time, step_time)
+                if ((self.step + 1) % args.log_fq) == 0:
+                    self.log_metrics(epoch, loss.item(), data_load_time, step_time)
                 if ((self.step + 1) % args.print_fq) == 0:
                     #avg = sum(self.losses)/len(self.losses)
                     #loss = round(avg, 5)
@@ -198,7 +201,6 @@ class Trainer:
                         # self.summary_writer.add_scalar('weights/' + tag, value.data.norm().item(), self.step)
                         # self.summary_writer.add_scalar('grads/' + tag, value.grad.data.norm().item(), self.step)
 
-                self.step += 1
                 data_load_start_time = time.time()
 
             self.summary_writer.add_scalar("epoch", epoch, self.step)
@@ -211,11 +213,10 @@ class Trainer:
 
             self.checkpoint(self.model, self.valloss, epoch)
 
-            
     
     def validate(self):
-        preds = []
         total_loss = 0
+        t_loss = 0
         self.model.eval()
 
         # No need to track gradients for validation, we're not optimizing.
@@ -223,19 +224,21 @@ class Trainer:
             for batch in self.val_loader:
                 images = batch['image'].to(self.device)
                 labels = batch['label'].to(self.device)
-                print(images.dtype)
                 logits = self.model(images)
-                loss = self.criterion(logits.squeeze().double(), labels.squeeze(1).double())
+                loss = self.criterion(logits.squeeze(), labels.squeeze())
+                loss_2 = nn.BCEWithLogitsLoss()(logits.squeeze(), labels.squeeze())
                 total_loss += loss.item()
+                t_loss += loss_2.item()
                 print("max val: ",np.max(torch.sigmoid(logits).cpu().numpy()))
-                preds.append(logits.cpu().numpy())
+                print("avg val: ",np.mean(torch.sigmoid(logits).cpu().numpy()))
         
 
         average_loss = total_loss / len(self.val_loader)
 
         self.valloss = average_loss
+        int_loss = t_loss / len(self.val_loader)
 
-        print(f"validation loss: {average_loss:.5f}")
+        print(f"validation loss: {int_loss:.5f}")
 
         self.summary_writer.add_scalars(
             "loss",
@@ -348,9 +351,10 @@ def main(args):
 
     model_checkpoint = ModelCheckpoint(args)
 
-    optimizer = optim.Adam(model.parameters(), lr = args.lr, eps=1e-07, weight_decay= args.wd)
+    optimizer = optim.Adam(model.parameters(), lr = args.lr)#, eps=1e-07, weight_decay= args.wd)
     #optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=1e-8, momentum=0.9)
     criterion = nn.BCEWithLogitsLoss()
+    #criterion = FocalLoss(gamma=2, alpha=0.25)
     #criterion = nn.CrossEntropyLoss()#weight = torch.Tensor([0.1,1.0]).to(DEVICE))
     trainer = Trainer(model, train_dataset, validation_dataset, model_checkpoint, criterion,optimizer, DEVICE, summary_writer, train_loader=train_loader, val_loader=validation_loader)
     trainer.train(args)

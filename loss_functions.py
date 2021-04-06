@@ -62,7 +62,7 @@ class FocalLoss(nn.Module):
     def __init__(self, gamma=0, alpha=None, reduction="mean"):
         super(FocalLoss, self).__init__()
         self.gamma = gamma
-        #self.alpha = 0 if alpha is None else alpha
+        self.alpha = 0 if alpha is None else alpha
         self.eps = 1e-8
         self.reduction = reduction
         self.alpha =0
@@ -74,8 +74,8 @@ class FocalLoss(nn.Module):
 
         #target = target.unsqueeze(dim=1)
 
-        loss_tmp = -torch.pow((1. - probs), self.gamma) * target * torch.log(probs + self.eps) \
-                -torch.pow(probs, self.gamma) * (1. - target) * torch.log(1. - probs + self.eps)
+        loss_tmp = -self.alpha*torch.pow((1. - probs), self.gamma) * target * torch.log(probs + self.eps) \ 
+                -(1-self.alpha)*torch.pow(probs, self.gamma) * (1. - target) * torch.log(1. - probs + self.eps) #first line when target is positive class, second line when negative class
 
         loss_tmp = loss_tmp.squeeze(dim=1)
 

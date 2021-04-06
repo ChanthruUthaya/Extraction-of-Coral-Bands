@@ -65,7 +65,7 @@ class Up(nn.Module):
 
         # if bilinear, use the normal convolutions to reduce the number of channels
         if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+            self.up = nn.Upsample(scale_factor=2)#, mode='bilinear', align_corners=True)
             self.conv1 = nn.Conv2d(in_channels, out_channels, 2)
             self.conv = DoubleConv(out_channels, out_channels)
         else:
@@ -75,7 +75,7 @@ class Up(nn.Module):
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
-        x1 = self.conv1(x1)
+        x1 = F.relu(self.conv1(x1))
         # print(x1.size())
         # input is CHW
         diffY = x2.size()[2] - x1.size()[2]
@@ -129,6 +129,6 @@ class UNetAblated(nn.Module):
         x = self.up2(x, x3)
         x = self.up3(x, x2)
         x = self.up4(x, x1)
-        x = self.p(x)
+        x = F.relu(self.p(x))
         logits = self.outc(x)
         return logits

@@ -30,7 +30,7 @@ torch.backends.cudnn.benchmark = True
 #All possible arguments.
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--epochs", type=int, default=5, help="Number of epochs to train for")
+parser.add_argument("--epochs", type=int, default=30, help="Number of epochs to train for")
 parser.add_argument("--lr", type=float, default=0.0001, help="Learning rate")
 parser.add_argument("--wd", type=float, default=0.00001, help="weight decay")
 parser.add_argument("--batch", type=int, default=2, help="Batch size")
@@ -41,8 +41,8 @@ parser.add_argument("-j", "--worker-count", default=cpu_count(), type=int, help=
 parser.add_argument("--vals", type=int, default=1, help="The number of validation samples to test")
 parser.add_argument("--val-fq", default=1, type=int, help="How frequently to test the model on the validation set in number of epochs")
 parser.add_argument("--summary-dir", type=str, default="summary", help="Summary directory")
-parser.add_argument("--log-fq", default=1, type=int, help="How frequently to save logs to tensorboard in number of steps")
-parser.add_argument("--print-fq", default=1, type=int, help="How frequently to print progress to the command line in number of steps")
+parser.add_argument("--log-fq", default=5, type=int, help="How frequently to save logs to tensorboard in number of steps")
+parser.add_argument("--print-fq", default=10, type=int, help="How frequently to print progress to the command line in number of steps")
 parser.add_argument("--tests", type=int, default=56, help="The number of tests to carry out once training is complete")
 
 ### CHECKPOINT ###
@@ -133,8 +133,8 @@ class Trainer:
 
                 data_load_time = data_load_end_time - data_load_start_time
                 step_time = time.time() - data_load_end_time
-            #     # if ((self.step + 1) % args.log_fq) == 0:
-            #     #     self.log_metrics(epoch, loss.item(), data_load_time, step_time)
+                if ((self.step) % args.log_fq) == 0:
+                    self.log_metrics(epoch, loss.item(), data_load_time, step_time)
                 if ((self.step + 1) % args.print_fq) == 0:
                     self.print_metrics(epoch, stats.mean(self.losses), data_load_time, step_time)
                     self.losses.clear()
@@ -221,7 +221,7 @@ def get_summary_writer_log_dir(args: argparse.Namespace) -> str:
         untangle in TB).
     """
     tb_log_dir_prefix = (
-          f"UNET_"
+          f"UNET_LSTM"
           f"bs={args.batch}_" +
           f"lr={args.lr}_" +
           f"run_"
@@ -246,6 +246,7 @@ def initialize_parameters(m):
 def main(args):
 
     #dir_train =  "D:/2D-remake/3ddata/chunk1/train"
+    #dir_train = os.readlink("scratch") + "data/train/"
     dir_train = "./data/train"
     dir_val = "./data/val"
 

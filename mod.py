@@ -41,7 +41,9 @@ if __name__ == '__main__':
 
     transform = Transform(flips, brightness, affine, mode='3D')
 
-    dataset = CoralDataset3D("D:/2D-remake/3ddata/chunk1/train",transform,0)
+    dataset = CoralDataset3D("D:/2D-remake/3ddata/chunk1/train",transform,0, k=1)
+
+    #print(dataset.ids[0])
 
     n_val = int(len(dataset) * 0.1)
     n_train = len(dataset) - n_val

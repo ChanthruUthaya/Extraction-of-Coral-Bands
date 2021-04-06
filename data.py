@@ -5,6 +5,7 @@ import skimage.io as io
 # import skimage.transform as trans
 from skimage import img_as_ubyte, morphology
 import torch
+from transformClass import *
 from torchvision import transforms, datasets
 from torch.utils.data import Dataset
 from PIL import Image
@@ -17,6 +18,13 @@ import matplotlib.pyplot as plt
 from keras.preprocessing.image import ImageDataGenerator
 import cv2 as cv
 # from tifffile import imread
+
+def not_in(string):
+    excluded = ['1490', '1520']
+    if string not in excluded:
+        return True
+    else:
+        return False
 
 
 # class CoralDataset(Dataset):
@@ -127,6 +135,10 @@ class CoralDataset2D(Dataset):
 
 
 class CoralDataset(Dataset):
+
+    #training old 2d data on old model
+
+
     def __init__(self, dir ,augmentations, mode, label_suffix = '_label', aug_dict=dict()):
         self.dir = dir
         self.img_dir = dir + "/image/"
@@ -251,6 +263,9 @@ class CoralDataset(Dataset):
         }#
 
 class CoralDatasetNew(Dataset):
+
+    #training new data for 2d
+
     def __init__(self, dir ,augmentations, mode, label_suffix = '-label'):
         self.dir = dir
         self.img_dir = dir + "images/cuts_images"
@@ -324,20 +339,23 @@ class CoralDatasetNew(Dataset):
 
 class CoralDataset3D(Dataset):
 
+    #for training new dataset on 3d data
+
     #changed so that no transform applied
 
     def __init__(self, dir ,augmentations, mode,k=3,size=256,step=1 ,label_suffix = '-label'):
         super().__init__()
         self.dir = dir
-        self.img_dir = dir + "images/cuts_images"
-        self.label_dir = dir + "labels/cuts_labels"
+        self.img_dir = dir + "/images/"
+        self.label_dir = dir + "/labels/"
         self.augmentations = augmentations
         self.mode = mode
         self.label_suffix = label_suffix
+        self.brightness = AdjustBrightness((0.9,1.1))
         self.k = k
         self.size = size
         self.step = 1
-        self.ids = [os.path.splitext(file)[0] for file in os.listdir(self.img_dir)]
+        self.ids = [os.path.splitext(file)[0] for file in os.listdir(self.img_dir) if not_in(os.path.splitext(file)[0].split('-')[-2])]
 
     def __len__(self):
         return len(self.ids)
@@ -346,16 +364,16 @@ class CoralDataset3D(Dataset):
     def adjust_data(image, label):
         if np.max(image) > 1:
             #print(np.max(image))
-            image = image / 65535
-            label = label / 65535
+            image = (image / 65535.0)*255.0
+            label = label / 255.0
             label[label > 0.5] = 1
             label[label <= 0.5] = 0
 
-        return image, label
+        return (image, label)
     
     def augment(self, img, label):
-        # if(self.mode == 0):
-        #     img, label = self.augmentations(img, label)
+        if(self.mode == 0):
+            img, label = self.augmentations(img, label)
         return img, label
 
     @staticmethod
@@ -376,6 +394,7 @@ class CoralDataset3D(Dataset):
 
         for num in slice_nums_to_get:
             name_string = '-'.join([name,x,y,str(num),rotation])
+           # print(name_string)
             img_file = glob(f'{self.img_dir}/{name_string}.*')
             if(len(img_file)!=0):
                 image = Image.open(img_file[0].replace('\\', '/'))
@@ -391,10 +410,18 @@ class CoralDataset3D(Dataset):
 
         adjusted = [CoralDataset3D.adjust_data(np.array(img).astype(np.float32),np.array(label).astype(np.float32)) for img, label in zip(image_files, label_files)]
 
+        bright_adjust = [self.brightness(img[0], img[1]) for img in adjusted]
+
+        # for img, label in bright_adjust:
+        #     img_g = Image.fromarray(img)
+        #     label_g = Image.fromarray(label*255)
+
+        #     img_g.show()
+        #     label_g.show()
         mid = (len(adjusted)-1)//2
 
 
-        images = torch.stack([transforms.ToTensor()(img[0]) for img in adjusted], axis=0)
+        images = torch.stack([transforms.ToTensor()(img[0]/255.0) for img in adjusted], axis=0)
         labels = transforms.ToTensor()(adjusted[mid][1])
 
         return {
