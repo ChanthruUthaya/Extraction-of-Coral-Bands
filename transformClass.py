@@ -101,7 +101,7 @@ class Transform:
 
             image, label = self.flip(image, label, h_flip, v_flip)
             image, label = self.affine(image, label, scale_val, shear_val, angle, h_trans_val, v_trans_val)
-            image, label = self.brightness(image, label)
+            # image, label = self.brightness(image, label) ##COMMENTED OUT FOR TRANSFER
 
             return image, label
         

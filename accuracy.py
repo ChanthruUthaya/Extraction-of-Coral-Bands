@@ -13,6 +13,8 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from multiprocessing import cpu_count
+from ctypes import CDLL
+import ctypes
 from pathlib import Path
 """
 1. Take test data, feed through network
@@ -33,6 +35,15 @@ if torch.cuda.is_available():
     DEVICE = torch.device("cuda")
 else:
     DEVICE = torch.device("cpu")
+
+ret = os.system("cc -fPIC -shared -std=c99 -o accuracy.so accuracy.c -lm")
+
+if ret == 0:
+    print("Successfully compiled C library.")
+    C = CDLL(os.path.abspath("accuracy.so"))
+else:
+    print("Couldn't compile C library. Exiting...")
+    exit()
 
 
 def calculate_accuracy(data_dir,weights, tests):
@@ -102,8 +113,14 @@ def calculate_accuracy(data_dir,weights, tests):
         skel = morphology.skeletonize(image)
         skel = skel.astype(int) * 255
 
-        # Find the white pixels and save their positions as a flattened 1D
-        # array to be used by the C library.
+        image_boundaries = list(np.array(list(np.where(skel == 255))).T.flatten())
+        label_boundaries = list(np.array(list(np.where(label == 255))).T.flatten())
+
+        # If a black image is produced then error would be inf. Place
+        # a single white pixel to get a finite accuracy score.
+        if (len(image_boundaries) == 0):
+            image_boundaries = [0, 0]
+
         image_boundaries = list(np.array(list(np.where(skel == 255))).T.flatten())
         label_boundaries = list(np.array(list(np.where(label == 255))).T.flatten())
 
@@ -123,7 +140,7 @@ def distance(x1, y1, x2, y2):
 
 def euclideanDistance(skel_whites, label_whites):
     distances1 = [float('inf')] * (len(skel_whites)//2)
-    #distances2 = [float('inf')] * (len(label_whites)//2)
+    distances2 = [float('inf')] * (len(label_whites)//2)
 
     print(len(skel_whites))
     print(len(label_whites))
@@ -134,8 +151,8 @@ def euclideanDistance(skel_whites, label_whites):
             distance_val = distance(skel_whites[i*2],skel_whites[i*2+1], label_whites[j*2],label_whites[j*2+1])
             if distance_val < distances1[i]:
                 distances1[i] = distance_val
-            # if distance_val < distances2[j]:
-            #     distances2[j] = distance_val
+            if distance_val < distances2[j]:
+                distances2[j] = distance_val
         sum1 += distances1[i]
     
     sum2 = 0
@@ -143,13 +160,13 @@ def euclideanDistance(skel_whites, label_whites):
         sum2 += val
     
     avg1 = sum1 / len(skel_whites)
-    #avg2 = sum2 / len(label_whites)
+    avg2 = sum2 / len(label_whites)
 
-    return sum1#(avg1 + avg2)/2
+    return (avg1 + avg2)/2
 
 if __name__ == '__main__':
-    accuracies = np.zeros(20)
-    for i in range(1,41,2):
+    accuracies = np.zeros(50)
+    for i in range(50):
         accuracies[i] = calculate_accuracy(args.dir+"/test/", args.resume_checkpoint+f"-{i}", 56)
         print((90 - accuracies[i]) / 90 * 100)
 

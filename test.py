@@ -54,10 +54,17 @@ def main(args):
 
         model.load_state_dict(checkpoint['model'])
 
-    dir_test = args.dir + "/test"
-    test_label = args.dir + "/test"
+    flips = Flip(0.5, 0.5)
+    brightness = AdjustBrightness((0.9,1.1))
+    affine = Affine(translate = [(-0.02, 0.02), (-0.02, 0.02)], shear_range=(-2,2), scale=0.02, angle=(-2,2))
 
-    test_data = CoralDataset(dir_test, augmentations=[] ,mode=1)
+    transform = Transform(flips, brightness, affine)
+
+    dir_test = "D:/2D-remake/3ddata/chunk1/chunk2/test/"
+   # test_label = args.dir + "/test"
+
+    test_data= CoralDatasetTransfer(dir_test,transform, mode=1)
+    #test_data = CoralDataset(dir_test, augmentations=[] ,mode=1)
     test_loader = DataLoader(test_data, shuffle=False ,batch_size=1, num_workers=args.worker_count, pin_memory=True)
 
     criterion = nn.BCEWithLogitsLoss()

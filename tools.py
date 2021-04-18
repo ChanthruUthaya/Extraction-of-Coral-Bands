@@ -41,6 +41,26 @@ class ModelCheckpoint:
                 'loss': loss
             }, save_name)
 
+class NewModelCheckpoint:
+
+    def __init__(self, args):
+        self.frequency = args.checkpoint_fq
+        self.path = args.checkpoint_path
+        self.epochs = args.epochs
+        self.args = args
+    
+    def __call__(self, model, loss, step,epoch):
+        ### CHECKPOINT - save parameters, args, accuracy ###
+            #Save every args.checkpoint_frequency or if this is the last epoch
+        save_name = f"{self.path}-{epoch}"
+        if (step) % self.frequency == 0:
+            print(f"Saving model to {self.path}-{epoch}")
+            torch.save({
+                'args': self.args,
+                'model': model.state_dict(),
+                'loss': loss
+            }, save_name)
+
 
 # def calculate_histogram(image):
 #     #hist = cv2.calcHist([image],[0],None,[2],[0,2])

@@ -33,7 +33,7 @@ else:
 
 def skeletonise(data_dir, weights):
 
-  #  model = SensorAblated(1,1).to(DEVICE)
+    #model = SensorAblated(1,1).to(DEVICE)
     model = UNetAblated(1,1).to(DEVICE)
 
         ### CHECKPOINT - load parameters, args, loss ###
@@ -49,16 +49,31 @@ def skeletonise(data_dir, weights):
 
     model.load_state_dict(checkpoint['model'])
 
-    #data = CoralDataset3DNew(data_dir, mode=1, k=1)
-    data = CoralDataset(data_dir, augmentations= [], mode=1)
-    data_loader = DataLoader(data, shuffle=False, batch_size=1, num_workers=args.worker_count, pin_memory=True)
+    # data = CoralDataset3DNew(data_dir, mode=1, k=1)
+    # #data = CoralDataset(data_dir, augmentations= [], mode=1)
+    # data_loader = DataLoader(data, shuffle=False, batch_size=1, num_workers=args.worker_count, pin_memory=True)
 
-    model.eval()
+    # model.eval()
+
+    # criterion = nn.BCEWithLogitsLoss()
+
+    flips = Flip(0.5, 0.5)
+    brightness = AdjustBrightness((0.9,1.1))
+    affine = Affine(translate = [(-0.02, 0.02), (-0.02, 0.02)], shear_range=(-2,2), scale=0.02, angle=(-2,2))
+
+    transform = Transform(flips, brightness, affine)
+
+    dir_test = "D:/2D-remake/3ddata/chunk1/test/"
+   # test_label = args.dir + "/test"
+
+    test_data= CoralDatasetTransfer(dir_test,transform, mode=1)
+    #test_data = CoralDataset(dir_test, augmentations=[] ,mode=1)
+    test_loader = DataLoader(test_data, shuffle=False ,batch_size=1, num_workers=args.worker_count, pin_memory=True)
 
     criterion = nn.BCEWithLogitsLoss()
 
     with torch.no_grad():
-        for i, batch in enumerate(data_loader):
+        for i, batch in enumerate(test_loader):
             image = batch['image']
             labels = batch['label']
             image = image.to(DEVICE)
@@ -66,7 +81,7 @@ def skeletonise(data_dir, weights):
             logits = model(image)
             loss = criterion(logits.squeeze(), labels.squeeze())
             logits = torch.sigmoid(logits)
-            print(f'[{i}/{len(data_loader)}] batch at loss: {loss.item()}')
+            print(f'[{i}/{len(test_loader)}] batch at loss: {loss.item()}')
             save_skel("./predictions/skeleton","./predictions/pred",logits.squeeze().cpu().numpy(), i)
 
 def save_skel(save_path_skel, save_path, image, i):

@@ -106,7 +106,7 @@ class Up(nn.Module):
 
         # if bilinear, use the normal convolutions to reduce the number of channels
         if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+            self.up = nn.Upsample(scale_factor=2)#, mode='bilinear', align_corners=True)
             self.conv1 = nn.Conv2d(in_channels, in_channels//2, 2)
             self.conv = DoubleConv(out_channels, out_channels)
         else:
@@ -192,10 +192,11 @@ class SensorAblated(nn.Module):
         self.unetUp = unetUp(n_classes, bilinear)
         
         self.tdDown = TimeDistributedDown(self.unetDown)
-        self.blstm1 = ConvBLSTM(in_channels=512, hidden_channels=1024, kernel_size=(3, 3), batch_first=True)
+       # self.blstm1 = ConvBLSTM(in_channels=512, hidden_channels=1024, kernel_size=(3, 3), batch_first=True)
         self.tdUp = TimeDistributedUp(self.unetUp)
-        self.blstm2 = ConvBLSTM(in_channels=64, hidden_channels=64, kernel_size=(3, 3), batch_first=True)
-        #self.bcgru = ConvBGRU(in_channels=64, hidden_channels=64, kernel_size=(3, 3), num_layer=1 ,batch_first=True)
+        # self.blstm2 = ConvBLSTM(in_channels=64, hidden_channels=64, kernel_size=(3, 3), batch_first=True)
+        # self.bcgru = ConvBGRU(in_channels=64, hidden_channels=64, kernel_size=(3, 3), num_layers=1 ,batch_first=True)
+        self.clstm = ConvLSTM(in_channels=64, hidden_channels=64, kernel_size=(3, 3),batch_first=True)
 
         self.outc = OutConv(64, 1)
 
@@ -217,14 +218,17 @@ class SensorAblated(nn.Module):
 
         out = self.tdUp(drop5, drop4, x1, x2, x3)
 
-        rev_index = list(reversed([i for i in range(out.size(1))]))
-        reversed_out = out[:,rev_index,...]
+        # rev_index = list(reversed([i for i in range(out.size(1))]))
+        # reversed_out = out[:,rev_index,...]
 
-        out = self.blstm2(out, reversed_out)
+        # out = self.blstm2(out, reversed_out)
 
-        out = torch.sum(out, dim=1)
+        # # out = torch.sum(out, dim=1)
+        out, _ = self.clstm(out)
 
-        logits = self.outc(out)
+        #final_out = out[:,-1,...]
+
+        logits = self.outc(out[:,-1,...].squeeze())
 
 
         return logits

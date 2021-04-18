@@ -30,7 +30,7 @@ pathlib.PosixPath = pathlib.WindowsPath
 parser = argparse.ArgumentParser()
 parser.add_argument("--resume-checkpoint", type=str, default="./checkpoint/checkpoint_lstm")
 parser.add_argument("--batch-size", default=2, type=int, help="Number of images within each mini-batch")
-parser.add_argument("--dir", type=str, default="./data")
+parser.add_argument("--dir", type=str, default="./3ddata/chunk1")
 parser.add_argument("-j", "--worker-count", default=cpu_count(), type=int, help="Number of worker processes used to load data.")
 args = parser.parse_args()
 
@@ -55,11 +55,17 @@ def main(args):
         print(f"Testing model {args.resume_checkpoint} that achieved {checkpoint['loss']} loss")
 
         model.load_state_dict(checkpoint['model'])
+    
+    flips = Flip(0.5, 0.5)
+    brightness = AdjustBrightness((0.9,1.1))
+    affine = Affine(translate = [(-0.02, 0.02), (-0.02, 0.02)], shear_range=(-2,2), scale=0.02, angle=(-2,2))
+
+    transform = TransformNew(flips, brightness, affine, mode='3D')
 
     dir_test = args.dir + "/test"
     test_label = args.dir + "/test"
 
-    test_data = CoralDataset3DNew(dir_test,mode=1, k=1)
+    test_data = CoralDataset3D(dir_test,transform,mode=1, k=1)
     test_loader = DataLoader(test_data, shuffle=False ,batch_size=1, num_workers=args.worker_count, pin_memory=True)
 
     criterion = nn.BCEWithLogitsLoss()

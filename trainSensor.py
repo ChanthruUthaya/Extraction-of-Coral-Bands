@@ -33,7 +33,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--epochs", type=int, default=5, help="Number of epochs to train for")
 parser.add_argument("--lr", type=float, default=0.0001, help="Learning rate")
 parser.add_argument("--wd", type=float, default=0.00001, help="weight decay")
-parser.add_argument("--batch", type=int, default=2, help="Batch size")
+parser.add_argument("--batch", type=int, default=1, help="Batch size")
 parser.add_argument("--dir", type=str, default="data", help="Data directory")
 parser.add_argument("-j", "--worker-count", default=cpu_count(), type=int, help="Number of worker processes used to load data.")
 
@@ -113,6 +113,7 @@ class Trainer:
 
 
                 logits = self.model(images)
+            
                 # logit_clone = logits.detach().clone()
 
                 # max_val = torch.max(torch.sigmoid(logit_clone))
@@ -168,9 +169,7 @@ class Trainer:
                 labels = batch['label'].to(self.device)
                 logits = self.model(images)
                 loss = self.criterion(logits.squeeze(), labels.squeeze())
-                loss_2 = nn.BCEWithLogitsLoss(logits.squeeze(), labels.squeeze())
                 total_loss += loss.item()
-                t_loss += loss.item()
                 print("max val: ",np.max(torch.sigmoid(logits).cpu().numpy()))
                 print("avg val: ",np.mean(torch.sigmoid(logits).cpu().numpy()))
         
@@ -178,9 +177,8 @@ class Trainer:
         average_loss = total_loss / len(self.val_loader)
 
         self.valloss = average_loss
-        int_loss = t_loss / len(self.val_loader)
 
-        print(f"validation loss: {int_loss:.5f}")
+        print(f"validation loss: {average_loss:.5f}")
 
         self.summary_writer.add_scalars(
             "loss",
@@ -250,8 +248,8 @@ def initialize_parameters(m):
 
 def main(args):
 
-    #dir_train = "D:/2D-remake/3ddata/chunk1/train"
-    dir_train = os.readlink('scratch') + "/data/train/"
+    dir_train = "D:/2D-remake/3ddata/chunk1/train"
+    #dir_train = os.readlink('scratch') + "/train/"
 
  
     flips = Flip(0.5, 0.5)
@@ -260,7 +258,7 @@ def main(args):
 
     transform = Transform(flips, brightness, affine, mode='3D')
     
-    train_dataset= CoralDataset3D(dir_train,transform, 0, k=1)
+    train_dataset= CoralDataset3D(dir_train,transform, 0, k=3)
     n_val = 50
     n_train = len(train_dataset) - n_val
     train, val = random_split(train_dataset, [n_train, n_val])
@@ -280,8 +278,8 @@ def main(args):
 
     optimizer = optim.Adam(model.parameters(), lr = args.lr)#, eps=1e-07, weight_decay= args.wd)
     #optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=1e-8, momentum=0.9)
-    criterion = nn.BCEWithLogitsLoss()# 
-    #criterion = FocalLoss(gamma=1, alpha=0.25)
+    #criterion = nn.BCEWithLogitsLoss()# 
+    criterion = FocalLoss(gamma=1, alpha=0.1)
     #criterion = nn.CrossEntropyLoss()#weight = torch.Tensor([0.1,1.0]).to(DEVICE))
     trainer = Trainer(model, model_checkpoint, criterion,optimizer, DEVICE, summary_writer, train_loader=train_loader, val_loader=validation_loader)
     trainer.train(args)
