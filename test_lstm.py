@@ -22,9 +22,9 @@ from pathlib import Path
 
 import time
 
-import pathlib
-temp = pathlib.PosixPath
-pathlib.PosixPath = pathlib.WindowsPath
+# import pathlib
+# temp = pathlib.PosixPath
+# pathlib.PosixPath = pathlib.WindowsPath
 
 
 parser = argparse.ArgumentParser()
@@ -41,7 +41,7 @@ else:
 
 
 def main(args):
-    model = SensorAblated(1,1).to(DEVICE)
+    model = SensorAblatedTest(1,1).to(DEVICE)
 
 
     ### CHECKPOINT - load parameters, args, loss ###
@@ -54,6 +54,8 @@ def main(args):
 
         print(f"Testing model {args.resume_checkpoint} that achieved {checkpoint['loss']} loss")
 
+       # print(checkpoint['model'])
+
         model.load_state_dict(checkpoint['model'])
     
     flips = Flip(0.5, 0.5)
@@ -62,10 +64,10 @@ def main(args):
 
     transform = TransformNew(flips, brightness, affine, mode='3D')
 
-    dir_test = args.dir + "/test"
+    dir_test = 'scratch/test_new'
     test_label = args.dir + "/test"
 
-    test_data = CoralDataset3D(dir_test,transform,mode=1, k=1)
+    test_data = CoralDataset3D(dir_test,transform,mode=1, k=5, excluded=['1620','1621','1622','1623'], direction=-1)
     test_loader = DataLoader(test_data, shuffle=False ,batch_size=1, num_workers=args.worker_count, pin_memory=True)
 
     criterion = nn.BCEWithLogitsLoss()
@@ -82,13 +84,13 @@ def main(args):
             image = image.to(DEVICE)
             labels = labels.to(DEVICE)
             logits = model(image)
-            loss = criterion(logits.squeeze(), labels.squeeze())
+            loss = criterion(logits[-1,...].squeeze(), labels.squeeze())
             logits = torch.sigmoid(logits)
             print(f'[{i}/{len(test_loader)}] batch at loss: {loss.item()}')
             total_loss += loss.item()
             preds.append(logits.cpu().numpy())
             print(np.max(logits.squeeze().cpu().numpy()))
-            save_pred("./predictions",logits.squeeze().cpu().numpy(), i)
+            save_pred_lstm("./predictions/5",logits.squeeze().cpu().numpy(), i)
 
     
     average_loss = total_loss / len(test_loader)

@@ -57,35 +57,76 @@ class WeightedCrossEntropyLoss(nn.BCEWithLogitsLoss):
         return loss_val
     
 
-class FocalLoss(nn.Module):
+# class FocalLoss(nn.Module):
 
-    def __init__(self, gamma=0, alpha=None, reduction="mean"):
-        super(FocalLoss, self).__init__()
-        self.gamma = gamma
-        self.alpha = 0 if alpha is None else alpha
-        self.eps = 1e-8
-        self.reduction = reduction
-        self.alpha =0
+#     def __init__(self, gamma=0, alpha=None, reduction="mean"):
+#         super(FocalLoss, self).__init__()
+#         self.gamma = gamma
+#         self.alpha = 0 if alpha is None else alpha
+#         self.eps = 1e-8
+#         self.reduction = reduction
+#         self.alpha =0
 
     
-    def forward(self, input, target):
+#     def forward(self, input, target):
 
-        probs = torch.sigmoid(input)
+#         probs = torch.sigmoid(input)
 
-        #target = target.unsqueeze(dim=1)
+#         #target = target.unsqueeze(dim=1)
 
-        loss_tmp = -self.alpha*torch.pow((1. - probs), self.gamma) * target * torch.log(probs + self.eps) -(1-self.alpha)*torch.pow(probs, self.gamma) * (1. - target) * torch.log(1. - probs + self.eps) #first line when target is positive class, second line when negative class
+#         loss_tmp = -self.alpha*torch.pow((1. - probs), self.gamma) * target * torch.log(probs + self.eps) -(1-self.alpha)*torch.pow(probs, self.gamma) * (1. - target) * torch.log(1. - probs + self.eps) #first line when target is positive class, second line when negative class
 
-        loss_tmp = loss_tmp.squeeze(dim=1)
+#         loss_tmp = loss_tmp.squeeze(dim=1)
 
-        if self.reduction == 'none':
-            loss = loss_tmp
-        elif self.reduction == 'mean':
-            loss = torch.mean(loss_tmp)
-        elif self.reduction == 'sum':
-            loss = torch.sum(loss_tmp)
+#         if self.reduction == 'none':
+#             loss = loss_tmp
+#         elif self.reduction == 'mean':
+#             loss = torch.mean(loss_tmp)
+#         elif self.reduction == 'sum':
+#             loss = torch.sum(loss_tmp)
         
-        return loss
+#         return loss
+
+def binary_focal_loss_with_logits(
+        input: torch.Tensor,
+        target: torch.Tensor,
+        alpha: float = .25,
+        gamma: float = 2.0,
+        reduction: str = 'none',
+        eps: float = 1e-8) -> torch.Tensor:
+
+    probs = torch.sigmoid(input)
+    target = target.unsqueeze(dim=1)
+    loss_tmp = - alpha * torch.pow((1. - probs + eps), gamma) * target * torch.log(probs + eps) \
+               - (1 - alpha) * torch.pow(probs + eps, gamma) * (1. - target) * torch.log(1. - probs + eps)
+
+    loss_tmp = loss_tmp.squeeze(dim=1)
+
+    if reduction == 'none':
+        loss = loss_tmp
+    elif reduction == 'mean':
+        loss = torch.mean(loss_tmp)
+    elif reduction == 'sum':
+        loss = torch.sum(loss_tmp)
+    else:
+        raise NotImplementedError("Invalid reduction mode: {}"
+                                  .format(reduction))
+    return loss
+
+
+class BinaryFocalLossWithLogits(nn.Module):
+
+    def __init__(self, alpha: float, gamma: float = 2.0,
+                 reduction: str = 'mean') -> None:
+        super(BinaryFocalLossWithLogits, self).__init__()
+        self.alpha: float = alpha
+        self.gamma: float = gamma
+        self.reduction: str = reduction
+        self.eps: float = 1e-8
+
+    def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        return binary_focal_loss_with_logits(
+            input, target, self.alpha, self.gamma, self.reduction, self.eps)
 
 class BinaryFocalLoss(nn.Module):
     """

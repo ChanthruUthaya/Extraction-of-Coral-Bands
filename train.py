@@ -20,6 +20,9 @@ from torchvision import transforms
 from multiprocessing import cpu_count
 from pathlib import Path
 import numpy as np
+from ctypes import CDLL
+import ctypes
+from image_boundaries import *
 
 import statistics as stats
 
@@ -58,11 +61,75 @@ parser.add_argument("--resume-checkpoint", type=Path)
 
 args = parser.parse_args()
 
+
+#ret = os.system("cc -fPIC -shared -std=c99 -o accuracy.so accuracy.c -lm")
+
+# if ret == 0:
+#     print("Successfully compiled C library.")
+#     C = CDLL(os.path.abspath("accuracy.so"))
+# else:
+#     print("Couldn't compile C library. Exiting...")
+#     exit()
+
 if torch.cuda.is_available():
     DEVICE = torch.device("cuda")
 else:
     DEVICE = torch.device("cpu")
 
+class HausdorfLoss(nn.Module):
+
+    def __init__(self, reduction="mean", theta=1.0, sigma=1.0):
+        super(HausdorfLoss, self).__init__()
+        self.eps = 1e-8
+        self.reduction = reduction
+        self.theta = theta
+        self.sigma = sigma
+
+    
+    def forward(self, input, target):
+
+        probs = torch.sigmoid(input)
+
+        # pred_clone = probs.detach().cpu().numpy()
+        # label_clone = target.detach().cpu().numpy()
+
+        # masks = []
+
+        # for batch_ind in range(pred_clone.shape[0]):
+
+        #     image_boundaries, label_boundaries = get_boundaries(pred_clone[batch_ind], label_clone[batch_ind])
+
+        #     c_image_boundaries = (ctypes.c_int * len(image_boundaries))(*image_boundaries)
+        #     c_label_boundaries = (ctypes.c_int * len(label_boundaries))(*label_boundaries)
+            
+        #     C.one_value_euclidean.restype = ctypes.c_double
+
+        #     mask = np.ones((pred_clone.shape[1], pred_clone.shape[2]))
+
+        #     for i in range(0,len(label_boundaries),2):
+        #         x = ctypes.c_int(label_boundaries[i])
+        #         y = ctypes.c_int(label_boundaries[i+1])
+
+        #         distance = C.one_value_euclidean(x,y,c_image_boundaries, len(image_boundaries))
+
+        #         mask[label_boundaries[i]][label_boundaries[i+1]] += self.theta*math.exp(-distance/self.sigma)
+
+        #     masks.append(mask)
+        
+        # masks = torch.tensor(np.stack(masks, axis=0)).float().to(DEVICE)
+
+        loss_tmp = (target * torch.log(probs + self.eps) - (1. - target) * torch.log(1. - probs + self.eps)) #first line when target is positive class, second line when negative class
+
+        loss_tmp = loss_tmp.squeeze(dim=1)
+
+        if self.reduction == 'none':
+            loss = loss_tmp
+        elif self.reduction == 'mean':
+            loss = torch.mean(loss_tmp)
+        elif self.reduction == 'sum':
+            loss = torch.sum(loss_tmp)
+        
+        return loss
 
 class Trainer:
     def __init__(
@@ -139,7 +206,7 @@ class Trainer:
                # logits = logits.view(-1,logits.size(2), logits.size(3))
 
                 
-                loss = self.criterion(logits.squeeze().double(), labels.squeeze().double())
+                loss = self.criterion(logits.double(), labels.squeeze().double())
                 
                 
                 # if self.step == 2:
@@ -225,12 +292,17 @@ class Trainer:
                 images = batch['image'].to(self.device)
                 labels = batch['label'].to(self.device)
                 logits = self.model(images)
-                loss = self.criterion(logits.squeeze(), labels.squeeze())
+                loss = self.criterion(logits, labels.squeeze())
                 loss_2 = nn.BCEWithLogitsLoss()(logits.squeeze(), labels.squeeze())
                 total_loss += loss.item()
                 t_loss += loss_2.item()
-                print("max val: ",np.max(torch.sigmoid(logits).cpu().numpy()))
-                print("avg val: ",np.mean(torch.sigmoid(logits).cpu().numpy()))
+                output = torch.sigmoid(logits).cpu().numpy()
+
+                print("max val: ",np.max(output))
+                print("avg val: ",np.mean(output))
+               # accuracy = validation_accuracy(output, labels.cpu().numpy())
+                #print("accuracy: ",accuracy)
+
         
 
         average_loss = total_loss / len(self.val_loader)
@@ -330,7 +402,7 @@ def main(args):
     brightness = AdjustBrightness((0.9,1.1))
     affine = Affine(translate = [(-0.02, 0.02), (-0.02, 0.02)], shear_range=(-2,2), scale=0.02, angle=(-2,2))
 
-    transform = Transform(flips, brightness, affine)
+    transform = Transform2D(flips, brightness, affine)
 
     # transform = transforms.Compose([transforms.ToTensor()])
 
@@ -368,7 +440,8 @@ def main(args):
     optimizer = optim.Adam(model.parameters(), lr = args.lr)#, eps=1e-07, weight_decay= args.wd)
     #optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=1e-8, momentum=0.9)
     #criterion = nn.BCEWithLogitsLoss()
-    criterion = FocalLoss(gamma=1, alpha=0.1)
+    #criterion = HausdorfLoss(sigma=10.0, theta=8.0)
+    criterion = BinaryFocalLossWithLogits(gamma=1.0, alpha=0.5)
     #criterion = nn.CrossEntropyLoss()#weight = torch.Tensor([0.1,1.0]).to(DEVICE))
     trainer = Trainer(model, train_dataset, validation_dataset, model_checkpoint, criterion,optimizer, DEVICE, summary_writer, train_loader=train_loader, val_loader=validation_loader)
     trainer.train(args)
@@ -378,6 +451,54 @@ def main(args):
     print("done training")
 
     summary_writer.close()
+
+
+def validation_accuracy(outputs, labels):
+
+    test_accuracies = np.zeros(outputs.shape[0])
+
+    for i in range(outputs.shape[0]):
+
+        image = outputs[i]
+        label = labels[i]
+
+        image *= 255
+        image = np.squeeze(image)
+        image = image.astype(np.uint8)
+        _, image = cv.threshold(image, 0, 255, cv.THRESH_OTSU)
+
+        # Extract the 2D label, multiply it by 255 so that values are
+        # now in the range of 0-255, and threshold.
+        label *= 255
+        label = label.astype(np.uint8)
+        _, label = cv.threshold(label, 127, 255, cv.THRESH_BINARY)
+
+        # Turn all 255s into 1s for the skeletonization.
+        image[image == 255] = 1
+
+        # Skeletonize the thresholded prediction and turn it back into
+        # a range of 0-255.
+        skel = morphology.skeletonize(image)
+        skel = skel.astype(int) * 255
+
+        image_boundaries = list(np.array(list(np.where(skel == 255))).T.flatten())
+        label_boundaries = list(np.array(list(np.where(label == 255))).T.flatten())
+
+        # If a black image is produced then error would be inf. Place
+        # a single white pixel to get a finite accuracy score.
+        if (len(image_boundaries) == 0):
+            image_boundaries = [0, 0]
+        
+
+        c_image_boundaries = (ctypes.c_int * len(image_boundaries))(*image_boundaries)
+        c_label_boundaries = (ctypes.c_int * len(label_boundaries))(*label_boundaries)
+        
+        C.euclidean.restype = ctypes.c_double
+
+        test_accuracies[i] = C.euclidean(c_image_boundaries, len(image_boundaries),
+                                c_label_boundaries, len(label_boundaries), 5)
+
+    return np.mean(test_accuracies)
     
 if __name__ == '__main__':
     main(parser.parse_args())

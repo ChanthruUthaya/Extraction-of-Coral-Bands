@@ -31,7 +31,7 @@ torch.backends.cudnn.benchmark = True
 #All possible arguments.
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--epochs", type=int, default=5, help="Number of epochs to train for")
+parser.add_argument("--epochs", type=int, default=30, help="Number of epochs to train for")
 parser.add_argument("--lr", type=float, default=0.0001, help="Learning rate")
 parser.add_argument("--wd", type=float, default=0.00001, help="weight decay")
 parser.add_argument("--batch", type=int, default=2, help="Batch size")
@@ -151,11 +151,11 @@ class Trainer:
                     self.validate()
                         # self.validate() will put the model in validation mode,
                         # so we have to switch back to train mode afterwards
+                    self.checkpoint(self.model, self.valloss,epoch)
                     self.model.train()
                 
                 # if (self.step % args.checkpoint_fq) == 0:
                 #     "save checkpoint"
-            self.checkpoint(self.model, self.valloss,epoch)
 
             
     
@@ -256,8 +256,8 @@ def main(args):
 
    # dir_train = "D:/2D-remake/3ddata/chunk1/sub/"
     print(args.checkpoint_fq, args.checkpoint_path)
-    dir_train = os.readlink('scratch') + "/sub/"
-    dir_val = os.readlink('scratch') + "/val/"
+    dir_train = os.readlink('scratch') + "/train_new_cubic/"
+    dir_val = os.readlink('scratch') + "/vals_new_cubic/"
 
  
     flips = Flip(0.5, 0.5)

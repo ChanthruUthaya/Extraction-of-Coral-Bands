@@ -16,6 +16,11 @@ from multiprocessing import cpu_count
 from ctypes import CDLL
 import ctypes
 from pathlib import Path
+
+# import pathlib
+# temp = pathlib.PosixPath
+# pathlib.PosixPath = pathlib.WindowsPath
+
 """
 1. Take test data, feed through network
 2. Take Groundtruths
@@ -44,6 +49,57 @@ if ret == 0:
 else:
     print("Couldn't compile C library. Exiting...")
     exit()
+
+
+def validation_accuracy(outputs, labels):
+
+    test_accuracies = np.zeros(outputs.shape[0])
+
+    for i in range(outputs.shape[0]):
+
+        image = outputs[i]
+        label = labels[i]
+
+        image *= 255
+        image = np.squeeze(image)
+        image = image.astype(np.uint8)
+        _, image = cv.threshold(image, 0, 255, cv.THRESH_OTSU)
+
+        # Extract the 2D label, multiply it by 255 so that values are
+        # now in the range of 0-255, and threshold.
+        label *= 255
+        label = label.astype(np.uint8)
+        _, label = cv.threshold(label, 127, 255, cv.THRESH_BINARY)
+
+        # Turn all 255s into 1s for the skeletonization.
+        image[image == 255] = 1
+
+        # Skeletonize the thresholded prediction and turn it back into
+        # a range of 0-255.
+        skel = morphology.skeletonize(image)
+        skel = skel.astype(int) * 255
+
+        image_boundaries = list(np.array(list(np.where(skel == 255))).T.flatten())
+        label_boundaries = list(np.array(list(np.where(label == 255))).T.flatten())
+
+        # If a black image is produced then error would be inf. Place
+        # a single white pixel to get a finite accuracy score.
+        if (len(image_boundaries) == 0):
+            image_boundaries = [0, 0]
+        
+
+        c_image_boundaries = (ctypes.c_int * len(image_boundaries))(*image_boundaries)
+        c_label_boundaries = (ctypes.c_int * len(label_boundaries))(*label_boundaries)
+        
+        C.euclidean.restype = ctypes.c_double
+
+        test_accuracies[i] = C.euclidean(c_image_boundaries, len(image_boundaries),
+                                c_label_boundaries, len(label_boundaries), 5)
+
+    return np.mean(test_accuracies)
+
+
+
 
 
 def calculate_accuracy(data_dir,weights, tests):
@@ -120,55 +176,30 @@ def calculate_accuracy(data_dir,weights, tests):
         # a single white pixel to get a finite accuracy score.
         if (len(image_boundaries) == 0):
             image_boundaries = [0, 0]
-
-        image_boundaries = list(np.array(list(np.where(skel == 255))).T.flatten())
-        label_boundaries = list(np.array(list(np.where(label == 255))).T.flatten())
-
-        # If a black image is produced then error would be inf. Place
-        # a single white pixel to get a finite accuracy score.
-        if (len(image_boundaries) == 0):
-            image_boundaries = [0, 0]
         
-        test_accuracies[i] = euclideanDistance(image_boundaries, label_boundaries)
-        acc = (90 - test_accuracies[i]) / 90 * 100
-        print(f'accuracy of {acc}')
+
+        c_image_boundaries = (ctypes.c_int * len(image_boundaries))(*image_boundaries)
+        c_label_boundaries = (ctypes.c_int * len(label_boundaries))(*label_boundaries)
+        
+        C.euclidean.restype = ctypes.c_double
+
+
+        # Call the C euclidean() method.
+        test_accuracies[i] = C.euclidean(c_image_boundaries, len(image_boundaries),
+                                c_label_boundaries, len(label_boundaries), 5)
+
+        
+        print(f'accuracy of {test_accuracies[i]}')
     
     return np.mean(test_accuracies)
 
-def distance(x1, y1, x2, y2):
-    return math.sqrt(math.pow(x1-x2,2)+math.pow(y1-y2,2))
-
-def euclideanDistance(skel_whites, label_whites):
-    distances1 = [float('inf')] * (len(skel_whites)//2)
-    distances2 = [float('inf')] * (len(label_whites)//2)
-
-    print(len(skel_whites))
-    print(len(label_whites))
-
-    sum1 = 0
-    for i in range(0, len(skel_whites)//2):
-        for j in range(0, len(label_whites)//2):
-            distance_val = distance(skel_whites[i*2],skel_whites[i*2+1], label_whites[j*2],label_whites[j*2+1])
-            if distance_val < distances1[i]:
-                distances1[i] = distance_val
-            if distance_val < distances2[j]:
-                distances2[j] = distance_val
-        sum1 += distances1[i]
-    
-    sum2 = 0
-    for val in distances2:
-        sum2 += val
-    
-    avg1 = sum1 / len(skel_whites)
-    avg2 = sum2 / len(label_whites)
-
-    return (avg1 + avg2)/2
-
 if __name__ == '__main__':
-    accuracies = np.zeros(50)
-    for i in range(50):
-        accuracies[i] = calculate_accuracy(args.dir+"/test/", args.resume_checkpoint+f"-{i}", 56)
-        print((90 - accuracies[i]) / 90 * 100)
+    # accuracies = np.zeros(50)
+    # for i in range(50):
+    #accuracies[i] = calculate_accuracy(args.dir+"/test/", args.resume_checkpoint+f"-{i}", 56)
+    accuracies = calculate_accuracy(args.dir+"/test/", args.resume_checkpoint+f"-43", 56)
+    print(accuracies)
+    #  print((90 - accuracies[i]) / 90 * 100)
 
-    print(list((90 - accuracies) / 90 * 100))
+    # print(list((90 - accuracies) / 90 * 100))
 

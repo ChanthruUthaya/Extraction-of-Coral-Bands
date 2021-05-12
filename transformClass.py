@@ -121,6 +121,56 @@ class Transform:
 
             return res_img, res_label
 
+class Transform2D:
+    def __init__(self, flip:Flip, brightness:AdjustBrightness, affine:Affine, mode='2D'):
+        self.flip = flip
+        self.brightness = brightness
+        self.affine = affine
+        self.mode = mode
+
+    def gen_flip_args(self):
+        h_flip = True if random.random() < self.flip.h_flip_prob else False
+        v_flip = True if random.random() < self.flip.v_flip_prob else False
+        return h_flip, v_flip
+
+    
+    def gen_affine_args(self):
+        scale_val = random.uniform(1-self.affine.scale, 1+self.affine.scale)
+        shear_val = random.uniform(self.affine.shear_range[0], self.affine.shear_range[1])
+        angle = random.uniform(self.affine.angle[0], self.affine.angle[1])
+        h_trans_val = random.uniform(self.affine.translate[0][0], self.affine.translate[0][1])
+        v_trans_val = random.uniform(self.affine.translate[1][0], self.affine.translate[1][1])
+
+        return scale_val, shear_val, angle, h_trans_val, v_trans_val
+    
+    def __call__(self, image, label):
+
+        if(self.mode == '2D'):
+            h_flip, v_flip = self.gen_flip_args()
+            scale_val, shear_val, angle, h_trans_val, v_trans_val = self.gen_affine_args()
+
+            image, label = self.flip(image, label, h_flip, v_flip)
+            image, label = self.affine(image, label, scale_val, shear_val, angle, h_trans_val, v_trans_val)
+            image, label = self.brightness(image, label) ##COMMENTED OUT FOR TRANSFER
+
+            return image, label
+        
+        elif(self.mode =='3D'):
+            h_flip, v_flip = self.gen_flip_args()
+            scale_val, shear_val, angle, h_trans_val, v_trans_val = self.gen_affine_args()
+            res_img = []
+            res_label = []
+            for img, img_label in zip(image, label):
+                if(str(type(img).__module__) == 'PIL.TiffImagePlugin'):
+                    img, img_label = self.flip(img, img_label, h_flip, v_flip)
+                    img, img_label = self.affine(img, img_label, scale_val, shear_val, angle, h_trans_val, v_trans_val)
+                    #img, img_label = self.brightness(img, img_label)
+
+                res_img.append(img)
+                res_label.append(img_label)
+
+            return res_img, res_label
+
 
 class TransformNew:
     def __init__(self, flip:Flip, brightness:AdjustBrightness, affine:Affine, mode='2D'):

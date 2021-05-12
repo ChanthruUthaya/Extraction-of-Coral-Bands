@@ -20,9 +20,9 @@ from pathlib import Path
 
 import time
 
-import pathlib
-temp = pathlib.PosixPath
-pathlib.PosixPath = pathlib.WindowsPath
+# import pathlib
+# temp = pathlib.PosixPath
+# pathlib.PosixPath = pathlib.WindowsPath
 
 
 parser = argparse.ArgumentParser()
@@ -60,7 +60,7 @@ def main(args):
 
     transform = Transform(flips, brightness, affine)
 
-    dir_test = "D:/2D-remake/3ddata/chunk1/chunk2/test/"
+    dir_test = "scratch/test_new/"
    # test_label = args.dir + "/test"
 
     test_data= CoralDatasetTransfer(dir_test,transform, mode=1)
@@ -87,7 +87,7 @@ def main(args):
             total_loss += loss.item()
             preds.append(logits.cpu().numpy())
             print(np.max(logits.squeeze().cpu().numpy()))
-            save_pred("./predictions/pred",logits.squeeze().cpu().numpy(), i)
+            save_pred("./predictions",logits.squeeze().cpu().numpy(), i)
 
     
     average_loss = total_loss / len(test_loader)

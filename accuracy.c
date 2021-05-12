@@ -5,11 +5,13 @@ double find_distance(int x1, int y1, int x2, int y2) {
   return sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2));
 }
 
-double euclidean_single(int* whites, int length, int* whites2, int length2) {
+int euclidean_single(int* whites, int length, int* whites2, int length2, int thresh) {
   length  /= 2;
   length2 /= 2;
   double distances[length];
-  double sum = 0;
+
+  int counts = 0;
+
   for (int i = 0; i < length; i++) {
     distances[i] = 1000.f;
     for (int j = 0; j < length2; j++) {
@@ -17,17 +19,43 @@ double euclidean_single(int* whites, int length, int* whites2, int length2) {
                                      whites2[j * 2], whites2[j * 2 + 1]);
       if (distance < distances[i]) distances[i] = distance;
     }
-    sum += distances[i];
   }
-  double ave = sum / (double) length;
-  return ave;
+  for(int i = 0; i < length; i++){
+    
+    if(distances[i] < thresh){
+      counts += 1;
+    }
+
+  }
+
+  return counts;
 }
 
-double euclidean(int* whites, int length, int* whites2, int length2) {
-  double one = euclidean_single(whites, length, whites2, length2);
-  double two = euclidean_single(whites2, length2, whites, length);
-  double ans = (one + two) / 2;
-  return (one + two) / 2;
+
+double one_value_euclidean(int x, int y, int*label_boundaries, int length){
+
+  double max_distance = 1000.f;
+  
+  for(int i = 0; i < length/2; i++){
+
+    double distance = find_distance(x, y, label_boundaries[i*2], label_boundaries[i*2+1]);
+
+    if(distance < max_distance) max_distance = distance;
+
+  }
+
+  return max_distance;
+
+}
+
+double euclidean(int* whites, int length, int* whites2, int length2, int thresh) {
+  int one = euclidean_single(whites, length, whites2, length2, thresh);
+  int two = euclidean_single(whites2, length2, whites, length, thresh);
+
+  double acc1 = (double)one/(double)(length/2);
+  double acc2 = (double)two/(double)(length2/2);
+
+  return (acc1 + acc2) / 2;
 }
 
 int main() {
