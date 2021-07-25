@@ -255,9 +255,9 @@ def initialize_parameters(m):
 def main(args):
 
    # dir_train = "D:/2D-remake/3ddata/chunk1/sub/"
-    print(args.checkpoint_fq, args.checkpoint_path)
-    dir_train = os.readlink('scratch') + "/train_new_cubic/"
-    dir_val = os.readlink('scratch') + "/vals_new_cubic/"
+    #print(args.checkpoint_fq, args.checkpoint_path)
+    dir_train = os.readlink('scratch') + "/train_new/"
+    dir_val = os.readlink('scratch') + "/vals_new/"
 
  
     flips = Flip(0.5, 0.5)
@@ -296,8 +296,8 @@ def main(args):
 
     optimizer = optim.Adam(model.parameters(), lr = args.lr)#, eps=1e-07, weight_decay= args.wd)
     #optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=1e-8, momentum=0.9)
-    #criterion = nn.BCEWithLogitsLoss()# 
-    criterion = FocalLoss(gamma=1, alpha=0.1)
+    criterion = nn.BCEWithLogitsLoss()# 
+    #criterion = FocalLoss(gamma=1, alpha=0.1)
     #criterion = nn.CrossEntropyLoss()#weight = torch.Tensor([0.1,1.0]).to(DEVICE))
     trainer = Trainer(model, model_checkpoint, criterion,optimizer, DEVICE, summary_writer, train_loader=train_loader, val_loader=validation_loader)
     trainer.train(args)

@@ -196,7 +196,9 @@ class SensorAblated(nn.Module):
         self.tdUp = TimeDistributedUp(self.unetUp)
         # self.blstm2 = ConvBLSTM(in_channels=64, hidden_channels=64, kernel_size=(3, 3), batch_first=True)
         # self.bcgru = ConvBGRU(in_channels=64, hidden_channels=64, kernel_size=(3, 3), num_layers=1 ,batch_first=True)
-        self.clstm = ConvLSTM(in_channels=64, hidden_channels=64, kernel_size=(3, 3),batch_first=True)
+        #self.clstm = ConvLSTM(in_channels=64, hidden_channels=64, kernel_size=(3, 3),batch_first=True)
+        #self.cgru = ConvGRU(in_channels=64, hidden_channels=64,kernel_size=3, num_layers=1,batch_first=True)
+        self.bcgru = ConvBGRU(in_channels=64, hidden_channels=64, kernel_size=3, num_layers=1 ,batch_first=True)
 
         self.outc = OutConv(64, 1)
 
@@ -224,7 +226,64 @@ class SensorAblated(nn.Module):
         # out = self.blstm2(out, reversed_out)
 
         # # out = torch.sum(out, dim=1)
-        out, _ = self.clstm(out)
+        reversed_idx = list(reversed(range(out.shape[1])))
+        # rev_index = list(reversed([i for i in range(out.size(1))]))
+        # reversed_out = out[:,rev_index,...]
+
+        # out = self.blstm2(out, reversed_out)
+        out_rev = out[:,reversed_idx,...]
+        # # out = torch.sum(out, dim=1)
+        out = self.bcgru(out, out_rev)
+
+        #final_out = out[:,-1,...]
+
+        logits = self.outc(out[:,-1,...])
+
+
+        return logits
+
+class SensorAblatedLSTM(nn.Module):
+    def __init__(self, n_channels, n_classes, bilinear=True):
+        super().__init__()
+
+        self.unetDown = unetDown(n_channels)
+        self.unetUp = unetUp(n_classes, bilinear)
+        
+        self.tdDown = TimeDistributedDown(self.unetDown)
+       # self.blstm1 = ConvBLSTM(in_channels=512, hidden_channels=1024, kernel_size=(3, 3), batch_first=True)
+        self.tdUp = TimeDistributedUp(self.unetUp)
+        # self.blstm2 = ConvBLSTM(in_channels=64, hidden_channels=64, kernel_size=(3, 3), batch_first=True)
+        self.bcgru = ConvBGRU(in_channels=64, hidden_channels=64, kernel_size=(3, 3), num_layers=1 ,batch_first=True)
+        #self.clstm = ConvLSTM(in_channels=64, hidden_channels=64, kernel_size=(3, 3),batch_first=True)
+        #self.clstm = ConvLSTM(in_channels=64, hidden_channels=64,kernel_size=(3,3),batch_first=True)
+
+        self.outc = OutConv(64, 1)
+
+    def forward(self, x):
+
+        drop5, drop4, x1, x2, x3 = self.tdDown(x)
+
+       # print(f'the outsize is {drop4.size()}')
+
+        # rev_index = list(reversed([i for i in range(drop4.size(1))]))
+        # reversed_out = drop4[:,rev_index,...]
+
+        # #print(f'rev size: {reversed_out.size()}')
+
+        # out = self.blstm1(drop4, reversed_out)
+
+        # batch, timesteps, channels, height, width = drop5.size()
+        # drop5 = drop5.contiguous().view(batch*timesteps, channels, height, width) 
+
+        out = self.tdUp(drop5, drop4, x1, x2, x3)
+        reversed_idx = list(reversed(range(out.shape[1])))
+        # rev_index = list(reversed([i for i in range(out.size(1))]))
+        # reversed_out = out[:,rev_index,...]
+
+        # out = self.blstm2(out, reversed_out)
+        out_rev = out[:,reversed_idx,...]
+        # # out = torch.sum(out, dim=1)
+        out = self.bcgru(out, out_rev)
 
         #final_out = out[:,-1,...]
 
@@ -245,7 +304,9 @@ class SensorAblatedTest(nn.Module):
         self.tdUp = TimeDistributedUp(self.unetUp)
         # self.blstm2 = ConvBLSTM(in_channels=64, hidden_channels=64, kernel_size=(3, 3), batch_first=True)
         # self.bcgru = ConvBGRU(in_channels=64, hidden_channels=64, kernel_size=(3, 3), num_layers=1 ,batch_first=True)
-        self.clstm = ConvLSTM(in_channels=64, hidden_channels=64, kernel_size=(3, 3),batch_first=True)
+        #self.clstm = ConvLSTM(in_channels=64, hidden_channels=64, kernel_size=(3, 3),batch_first=True)
+        self.bcgru = ConvBGRU(in_channels=64, hidden_channels=64, kernel_size=3, num_layers=1 ,batch_first=True)
+        #self.cgru = ConvGRU(in_channels=64, hidden_channels=64,kernel_size=3, num_layers=1,batch_first=True)
 
         self.outc = OutConv(64, 1)
 
@@ -273,9 +334,19 @@ class SensorAblatedTest(nn.Module):
         # out = self.blstm2(out, reversed_out)
 
         # # out = torch.sum(out, dim=1)
-        out, _ = self.clstm(out)
+       
 
-        timesteps, batch, channels, height, width = out.size()
+        out = self.tdUp(drop5, drop4, x1, x2, x3)
+        reversed_idx = list(reversed(range(out.shape[1])))
+        # rev_index = list(reversed([i for i in range(out.size(1))]))
+        # reversed_out = out[:,rev_index,...]
+
+        # out = self.blstm2(out, reversed_out)
+        out_rev = out[:,reversed_idx,...]
+        # # out = torch.sum(out, dim=1)
+        out = self.bcgru(out, out_rev)
+
+        batch, timesteps, channels, height, width = out.size()
 
         out = out.view(timesteps*batch, channels, height, width)
 

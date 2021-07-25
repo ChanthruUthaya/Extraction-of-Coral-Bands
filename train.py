@@ -49,7 +49,7 @@ parser.add_argument("--print-fq", default=10, type=int, help="How frequently to 
 parser.add_argument("--tests", type=int, default=56, help="The number of tests to carry out once training is complete")
 
 ### CHECKPOINT ###
-parser.add_argument("--checkpoint-path", type=Path, default=Path("./checkpoint/checkpoint"))
+parser.add_argument("--checkpoint-path", type=Path, default=Path("./scratch/checkpoint_unet/checkpoint"))
 #parser.add_argument("--checkpoint-n", type=str, default="2")
 parser.add_argument("--checkpoint-fq", type=int, default=1, help="Save a checkpoint every N epochs")
 parser.add_argument("--resume-checkpoint", type=Path)
@@ -62,14 +62,14 @@ parser.add_argument("--resume-checkpoint", type=Path)
 args = parser.parse_args()
 
 
-#ret = os.system("cc -fPIC -shared -std=c99 -o accuracy.so accuracy.c -lm")
+ret = os.system("cc -fPIC -shared -std=c99 -o accuracy.so accuracy.c -lm")
 
-# if ret == 0:
-#     print("Successfully compiled C library.")
-#     C = CDLL(os.path.abspath("accuracy.so"))
-# else:
-#     print("Couldn't compile C library. Exiting...")
-#     exit()
+if ret == 0:
+    print("Successfully compiled C library.")
+    C = CDLL(os.path.abspath("accuracy.so"))
+else:
+    print("Couldn't compile C library. Exiting...")
+    exit()
 
 if torch.cuda.is_available():
     DEVICE = torch.device("cuda")
@@ -78,47 +78,57 @@ else:
 
 class HausdorfLoss(nn.Module):
 
-    def __init__(self, reduction="mean", theta=1.0, sigma=1.0):
+    def __init__(self, reduction="mean",gamma=1, theta=1.0, sigma=1.0):
         super(HausdorfLoss, self).__init__()
         self.eps = 1e-8
         self.reduction = reduction
         self.theta = theta
         self.sigma = sigma
+        self.gamma =gamma
 
     
     def forward(self, input, target):
 
         probs = torch.sigmoid(input)
 
-        # pred_clone = probs.detach().cpu().numpy()
-        # label_clone = target.detach().cpu().numpy()
+        pred_clone = probs.detach().cpu().numpy()
+        label_clone = target.detach().cpu().numpy()
 
-        # masks = []
+        weight_maps = []
 
-        # for batch_ind in range(pred_clone.shape[0]):
+        for batch_ind in range(pred_clone.shape[0]):
 
-        #     image_boundaries, label_boundaries = get_boundaries(pred_clone[batch_ind], label_clone[batch_ind])
+            image_boundaries, label_boundaries = get_boundaries(pred_clone[batch_ind], label_clone[batch_ind])
 
-        #     c_image_boundaries = (ctypes.c_int * len(image_boundaries))(*image_boundaries)
-        #     c_label_boundaries = (ctypes.c_int * len(label_boundaries))(*label_boundaries)
+            c_image_boundaries = (ctypes.c_int * len(image_boundaries))(*image_boundaries)
+            c_label_boundaries = (ctypes.c_int * len(label_boundaries))(*label_boundaries)
             
-        #     C.one_value_euclidean.restype = ctypes.c_double
+            C.one_value_euclidean.restype = ctypes.c_double
 
-        #     mask = np.ones((pred_clone.shape[1], pred_clone.shape[2]))
+            weight_map = np.ones((pred_clone.shape[1], pred_clone.shape[2]))
 
-        #     for i in range(0,len(label_boundaries),2):
-        #         x = ctypes.c_int(label_boundaries[i])
-        #         y = ctypes.c_int(label_boundaries[i+1])
+            for i in range(0,len(label_boundaries),2):
+                x = ctypes.c_int(label_boundaries[i])
+                y = ctypes.c_int(label_boundaries[i+1])
 
-        #         distance = C.one_value_euclidean(x,y,c_image_boundaries, len(image_boundaries))
+                distance = C.one_value_euclidean(x,y,c_image_boundaries, len(image_boundaries))
 
-        #         mask[label_boundaries[i]][label_boundaries[i+1]] += self.theta*math.exp(-distance/self.sigma)
+                weight_map[label_boundaries[i]][label_boundaries[i+1]] += self.theta*math.exp(-distance/self.sigma)
+            
+            
+            for i in range(0,len(image_boundaries),2):
+                x = ctypes.c_int(image_boundaries[i])
+                y = ctypes.c_int(image_boundaries[i+1])
 
-        #     masks.append(mask)
+                distance = C.one_value_euclidean(x,y,c_label_boundaries, len(c_image_boundaries))
+
+                weight_map[image_boundaries[i]][image_boundaries[i+1]] += self.theta*math.exp(-distance/self.sigma)
+
+            weight_maps.append(weight_map)
         
-        # masks = torch.tensor(np.stack(masks, axis=0)).float().to(DEVICE)
+        weight_maps = torch.tensor(np.stack(weight_maps, axis=0)).to(DEVICE)
 
-        loss_tmp = (target * torch.log(probs + self.eps) - (1. - target) * torch.log(1. - probs + self.eps)) #first line when target is positive class, second line when negative class
+        loss_tmp = weight_maps*(-torch.pow((1. - probs), self.gamma) * target * torch.log(probs + self.eps) -torch.pow(probs, self.gamma) * (1. - target) * torch.log(1. - probs + self.eps)) #first line when target is positive class, second line when negative class
 
         loss_tmp = loss_tmp.squeeze(dim=1)
 
@@ -206,7 +216,8 @@ class Trainer:
                # logits = logits.view(-1,logits.size(2), logits.size(3))
 
                 
-                loss = self.criterion(logits.double(), labels.squeeze().double())
+                loss = self.criterion(logits.squeeze().double(), labels.squeeze().double())
+               # accuracy = validation_accuracy(torch.sigmoid(logits).detach().cpu().numpy(), labels.detach().cpu().numpy())
                 
                 
                 # if self.step == 2:
@@ -284,6 +295,7 @@ class Trainer:
     def validate(self):
         total_loss = 0
         t_loss = 0
+        accuracies = []
         self.model.eval()
 
         # No need to track gradients for validation, we're not optimizing.
@@ -292,7 +304,7 @@ class Trainer:
                 images = batch['image'].to(self.device)
                 labels = batch['label'].to(self.device)
                 logits = self.model(images)
-                loss = self.criterion(logits, labels.squeeze())
+                loss = self.criterion(logits.double().squeeze(), labels.double().squeeze())
                 loss_2 = nn.BCEWithLogitsLoss()(logits.squeeze(), labels.squeeze())
                 total_loss += loss.item()
                 t_loss += loss_2.item()
@@ -300,22 +312,30 @@ class Trainer:
 
                 print("max val: ",np.max(output))
                 print("avg val: ",np.mean(output))
-               # accuracy = validation_accuracy(output, labels.cpu().numpy())
-                #print("accuracy: ",accuracy)
+                accuracy = validation_accuracy(output, labels.cpu().numpy())
+                accuracies.append(accuracy)
+                print("accuracy: ",accuracy)
 
         
 
         average_loss = total_loss / len(self.val_loader)
+        average_accuracy = stats.mean(accuracies)
 
         self.valloss = average_loss
         int_loss = t_loss / len(self.val_loader)
 
+        print(f"average accuracy: {average_accuracy:.5f}")
         print(f"bce validation loss: {int_loss:.5f}")
         print(f"validation loss: {average_loss:.5f}")
 
         self.summary_writer.add_scalars(
             "loss",
-            {"test": average_loss},
+            {"validation": average_loss},
+            self.step
+        )
+        self.summary_writer.add_scalars(
+            "accuracy",
+            {"validation": average_accuracy},
             self.step
         )
 
@@ -441,7 +461,7 @@ def main(args):
     #optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=1e-8, momentum=0.9)
     #criterion = nn.BCEWithLogitsLoss()
     #criterion = HausdorfLoss(sigma=10.0, theta=8.0)
-    criterion = BinaryFocalLossWithLogits(gamma=1.0, alpha=0.5)
+    criterion = HausdorfLoss(gamma=1 ,theta=8, sigma=10)
     #criterion = nn.CrossEntropyLoss()#weight = torch.Tensor([0.1,1.0]).to(DEVICE))
     trainer = Trainer(model, train_dataset, validation_dataset, model_checkpoint, criterion,optimizer, DEVICE, summary_writer, train_loader=train_loader, val_loader=validation_loader)
     trainer.train(args)

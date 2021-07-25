@@ -13,22 +13,22 @@ import re
 # save_dir = dir + "/data/train/images/"
 # save_label = dir + "/data/train/labels/"
 
-dir = "D:/2D-remake/3ddata/chunk1/"
+dir = "D:/2D-remake/3ddata/chunk1"
 #dir = os.readlink('scratch')
 
 train_root = dir + '/train_images'
 test_root = dir + '/test_images'
 
 
-image_path = train_root + "/crop_resize/"
-label_path = train_root+ "/crop_label_resize/"
+image_path = train_root + "/images/"
+label_path = train_root+ "/labels/"
 
-test_path = test_root + "/crop_resize/"
-test_label_path = test_root+ "/crop_label_resize/"
+test_path = test_root + "/images/"
+test_label_path = test_root+ "/labels/"
 
-save_test_dir = dir + "/test_new/"
-save_val_dir = dir + '/vals_new/'
-save_dir = dir + "/train_new/"
+save_test_dir = dir + "/test_new2/"
+save_val_dir = dir + '/vals_new2/'
+save_dir = dir + "/train_new2/"
 
 
 image_dir = f"{save_dir}/images"

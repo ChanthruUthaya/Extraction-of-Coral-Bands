@@ -52,10 +52,9 @@ double euclidean(int* whites, int length, int* whites2, int length2, int thresh)
   int one = euclidean_single(whites, length, whites2, length2, thresh);
   int two = euclidean_single(whites2, length2, whites, length, thresh);
 
-  double acc1 = (double)one/(double)(length/2);
-  double acc2 = (double)two/(double)(length2/2);
 
-  return (acc1 + acc2) / 2;
+  double acc = (double)(one+two)/(double)((length/2)+(length2/2));
+  return acc;
 }
 
 int main() {

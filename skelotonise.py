@@ -16,9 +16,9 @@ from torchvision import transforms
 from multiprocessing import cpu_count
 from pathlib import Path
 
-import pathlib
-temp = pathlib.PosixPath
-pathlib.PosixPath = pathlib.WindowsPath
+# import pathlib
+# temp = pathlib.PosixPath
+# pathlib.PosixPath = pathlib.WindowsPath
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--resume-checkpoint", type=str, default="./checkpoint/checkpoint-0")
@@ -63,11 +63,11 @@ def skeletonise(data_dir, weights):
 
     transform = Transform(flips, brightness, affine)
 
-    dir_test = "D:/2D-remake/3ddata/chunk1/test/"
-   # test_label = args.dir + "/test"
+    dir_test = "./scratch/test_new/"
+    #test_label = args.dir + "/test"
 
-    test_data= CoralDatasetTransfer(dir_test,transform, mode=1)
-    #test_data = CoralDataset(dir_test, augmentations=[] ,mode=1)
+    #test_data= CoralDatasetTransferTest(dir_test,transform, mode=1)
+    test_data = CoralDataset(args.dir + "/test", augmentations=[] ,mode=1)
     test_loader = DataLoader(test_data, shuffle=False ,batch_size=1, num_workers=args.worker_count, pin_memory=True)
 
     criterion = nn.BCEWithLogitsLoss()
@@ -76,13 +76,14 @@ def skeletonise(data_dir, weights):
         for i, batch in enumerate(test_loader):
             image = batch['image']
             labels = batch['label']
+            name = batch['name']
             image = image.to(DEVICE)
             labels = labels.to(DEVICE)
             logits = model(image)
             loss = criterion(logits.squeeze(), labels.squeeze())
             logits = torch.sigmoid(logits)
             print(f'[{i}/{len(test_loader)}] batch at loss: {loss.item()}')
-            save_skel("./predictions/skeleton","./predictions/pred",logits.squeeze().cpu().numpy(), i)
+            save_skel("./predictions/skeleton","./predictions/pred",logits.squeeze().cpu().numpy(), name)
 
 def save_skel(save_path_skel, save_path, image, i):
 

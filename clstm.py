@@ -79,11 +79,7 @@ class ConvLSTM(nn.Module):
         b, seq_len, _, h, w = input_tensor.size()
 
         h, c = self.clstm.init_hidden(b, h, w)
-
-        layer_output_list = []
-        last_state_list = []
-
-        
+ 
         cell_output = []
 
         for t in range(seq_len):

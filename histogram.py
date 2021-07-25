@@ -16,14 +16,14 @@ from PIL import Image
 # save_dir = dir + "/data/train/images/"
 # save_label = dir + "/data/train/labels/"
 
-dir = "D:/2D-remake/3ddata/chunk1/train_images"
+dir = "D:/2D-remake/"
 # dir = "D:/2D-remake/data/train/"
 #dir = os.readlink('scratch')
 
 
 image_path = dir + "/sub/images"
 #label_path = dir+ "/crop_label_resize/"
-label_path = dir+ "/crop_label_resize"
+label_path = dir+ "class_imb"
 
 save_test_dir = dir + "/crop_label_resize/thresh/"
 save_dir = dir + "/sub/"
@@ -36,7 +36,7 @@ def adjust_data(label):
         label[label > 0.5] = 1
         label[label <= 0.5] = 0
 
-        return label*255.0
+        return label
 
 labels = [os.path.splitext(file)[0] for file in os.listdir(label_path)]
 
@@ -49,10 +49,12 @@ for i, label in enumerate(labels):
        # image_pil.show()
 
         image = cv.imread(img_file, 0)
-        print(image.shape)
-        print(np.max(image))
-        image = adjust_data(image)
-        print(image.shape)
-        print(np.unique(image))
+        #cv.imshow("image",image)
 
-        cv.imwrite(save_test_dir + f"/{i}-label.png", image)
+        image = adjust_data(image)
+        plt.hist(image.ravel(),2,[0,2]); plt.show()
+
+
+
+
+        # cv.imwrite(save_test_dir + f"/{i}-label.png", image)

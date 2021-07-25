@@ -6,8 +6,8 @@ import math
 from PIL import Image
 
 
-dir = os.readlink('scratch')
-#dir = "D:/2D-remake/3ddata/chunk1"
+#dir = os.readlink('scratch')
+dir = "D:/2D-remake/3ddata/chunk1"
 
 train_root = dir + '/train_images/'
 test_root = dir + '/test_images/'
@@ -40,9 +40,6 @@ if not os.path.exists(save_test_label):
     os.makedirs(save_test_label)
 
 label_prefix = "_labels"
-
-size = 512
-stride = 512
 
 scale_percent = 0.5
 brightness_factor = 1.2

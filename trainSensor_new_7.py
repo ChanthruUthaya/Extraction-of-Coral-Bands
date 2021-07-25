@@ -49,7 +49,7 @@ parser.add_argument("--print-fq", default=10, type=int, help="How frequently to 
 parser.add_argument("--tests", type=int, default=56, help="The number of tests to carry out once training is complete")
 
 ### CHECKPOINT ###
-parser.add_argument("--checkpoint-path", type=Path, default=Path("./scratch/checkpoint/checkpoint_lstm"))
+parser.add_argument("--checkpoint-path", type=Path, default=Path("./scratch/checkpoint_k/7/checkpoint"))
 #parser.add_argument("--checkpoint-n", type=str, default="2")
 parser.add_argument("--checkpoint-fq", type=int, default=1, help="Save a checkpoint every N epochs")
 parser.add_argument("--resume-checkpoint", type=Path)
@@ -288,8 +288,8 @@ def main(args):
 
     transform = TransformNew(flips, brightness, affine, mode='3D')
 
-    train_dataset= CoralDataset3D(dir_train,transform, 0, k=3, excluded=['1490','1491'])
-    val_dataset = CoralDataset3D(dir_val,transform, 1, k=3,excluded=['1620','1621'], direction=-1)
+    train_dataset= CoralDataset3D(dir_train,transform, 0, k=7, excluded=['1490','1491','1492','1493','1494','1495'])
+    val_dataset = CoralDataset3D(dir_val,transform, 1, k=7,excluded=['1620','1621','1622','1623'], direction=-1)
     # n_val = 50
     # n_train = len(train_dataset) - n_val
     # train, val = random_split(train_dataset, [n_train, n_val])

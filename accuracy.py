@@ -3,6 +3,7 @@ import numpy as np
 import math
 from model_ablated import *
 from data import *
+from transformClass import *
 import os
 import torch
 import torch.backends.cudnn
@@ -31,7 +32,8 @@ from pathlib import Path
 """
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--resume-checkpoint", type=str, default="./checkpoint/checkpoint")
+parser.add_argument("--resume-checkpoint", type=str, default="./scratch/checkpoint_unet/checkpoint")
+parser.add_argument("--epochs", type=int, default=60)
 parser.add_argument("--dir", type=str, default="./data")
 parser.add_argument("-j", "--worker-count", default=cpu_count(), type=int, help="Number of worker processes used to load data.")
 args = parser.parse_args()
@@ -118,6 +120,13 @@ def calculate_accuracy(data_dir,weights, tests):
 
     model.load_state_dict(checkpoint['model'])
 
+    flips = Flip(0.5, 0.5)
+    brightness = AdjustBrightness((0.9,1.1))
+    affine = Affine(translate = [(-0.02, 0.02), (-0.02, 0.02)], shear_range=(-2,2), scale=0.02, angle=(-2,2))
+
+    transform = Transform(flips, brightness, affine)
+
+    #data = CoralDatasetTransfer(data_dir,transform,1)
     data = CoralDataset(data_dir, augmentations= [], mode=1)
     data_loader = DataLoader(data, shuffle=False, batch_size=1, num_workers=args.worker_count, pin_memory=True)
 
@@ -141,7 +150,7 @@ def calculate_accuracy(data_dir,weights, tests):
             logits = torch.sigmoid(logits)
             print(f'[{i}/{len(data_loader)}] batch at loss: {loss.item()}')
             results.append(logits.cpu().numpy())
-            labels_arr.append(labels.squeeze().cpu().numpy())
+            labels_arr.append(labels.cpu().numpy())
 
 
     for i, item in enumerate(results):
@@ -156,10 +165,11 @@ def calculate_accuracy(data_dir,weights, tests):
 
         # Extract the 2D label, multiply it by 255 so that values are
         # now in the range of 0-255, and threshold.
-        label = labels_arr[i]
+        label = labels_arr[i].squeeze()
         label *= 255
         label = label.astype(np.uint8)
         _, label = cv.threshold(label, 127, 255, cv.THRESH_BINARY)
+        
 
         # Turn all 255s into 1s for the skeletonization.
         image[image == 255] = 1
@@ -171,6 +181,9 @@ def calculate_accuracy(data_dir,weights, tests):
 
         image_boundaries = list(np.array(list(np.where(skel == 255))).T.flatten())
         label_boundaries = list(np.array(list(np.where(label == 255))).T.flatten())
+
+        print(len(image_boundaries))
+        print(len(label_boundaries))
 
         # If a black image is produced then error would be inf. Place
         # a single white pixel to get a finite accuracy score.
@@ -195,11 +208,15 @@ def calculate_accuracy(data_dir,weights, tests):
 
 if __name__ == '__main__':
     # accuracies = np.zeros(50)
-    # for i in range(50):
-    #accuracies[i] = calculate_accuracy(args.dir+"/test/", args.resume_checkpoint+f"-{i}", 56)
-    accuracies = calculate_accuracy(args.dir+"/test/", args.resume_checkpoint+f"-43", 56)
-    print(accuracies)
+    # for i in range(60):
+    #accuracies[i] = calculate_accuracy(args.dir+"/test/", args.resume_checkpoint+f"-{i}", 56)#
+    cp_arg = args.resume_checkpoint+f"-{20}"
+    #cp = "./scratch/checkpoint/checkpoint_transfer-4"
+    cp = "checkpoint/good_cp/checkpoint-43_focal_good_one"
+    data_dir = "data/test"
+    accuracies = calculate_accuracy(data_dir,cp,56)
+    # print(accuracies[i])
     #  print((90 - accuracies[i]) / 90 * 100)
-
+    print(accuracies)
     # print(list((90 - accuracies) / 90 * 100))
 

@@ -4,3 +4,6 @@ __pycache__/
 checkpoint/
 predictions/
 3ddata/
+new_preds/
+scp_preds/
+class_imb/
